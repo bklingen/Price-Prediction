@@ -149,3 +149,29 @@ test = select(test, -c(GarageCars))
 
 
 ## Handle Categorical Features
+```{r}
+cleanpool <- as.character(train_catPredictors$PoolQC)
+cleanpool[is.na(cleanpool)] <- "none"
+cleanpool <- as.factor(cleanpool)
+```
+
+```{r}
+cleanfence <- as.character(train_catPredictors$Fence)
+cleanfence[is.na(cleanfence)] <- "none"
+cleanfence <- as.factor(cleanfence)
+```
+
+```{r}
+cleanfunc <- as.character(train_catPredictors$Functional)
+cleanfunc[cleanfunc == 'Min1' | cleanfunc == 'Min2'] <- "Minor"
+cleanfunc[cleanfunc == 'Maj1' | cleanfunc == 'Maj2'] <- "Major"
+cleanfunc[cleanfunc == 'Sev' | cleanfunc == 'Sal'] <- "Severe"
+cleanfunc <- as.factor(cleanfunc)
+```
+
+```{r}
+train_catPredictors$PoolQC <- cleanpool
+train_catPredictors$Fence <- cleanfence
+train_catPredictors$Functional <- cleanfunc
+```
+
