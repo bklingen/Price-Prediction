@@ -2,9 +2,6 @@
 title: "Predicting House Prices"
 output:
   pdf_document: default
-  html_document:
-    df_print: paged
-  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -151,8 +148,6 @@ test = select(test, -c(GarageCars))
 
 
 ## Handle Categorical Features
-<<<<<<< HEAD
-
 
 # Richard's Features
 
@@ -166,15 +161,15 @@ roof_price <- train %>% group_by(RoofStyle) %>% summarize(count=n(),
 
 roof_price
 ```
+
 ```{r}
 train$RoofStyle <- fct_collapse(train$RoofStyle, Other = c("Flat", "Shed"))
 train$RoofStyle <- fct_collapse(train$RoofStyle, Gable = c("Gable", "Gambrel", "Mansard"))
 ```
 
 
-
 ### BldgType
-**combine 2FmCon, Duplex as multifamily; leave others as is**
+Combine 2FmCon, Duplex as multifamily; leave others as is
 
 ```{r}
 bldg_price <- train %>% group_by(BldgType) %>% summarize(count=n(),
@@ -182,12 +177,13 @@ bldg_price <- train %>% group_by(BldgType) %>% summarize(count=n(),
 
 bldg_price
 ```
+
 ```{r}
 train$BldgType <- fct_collapse(train$BldgType, MultiFam = c("2fmCon", "Duplex"))
 ```
 
 ### HouseStyle
-**combine 1.5Fin, 1Story, split foyer, split level as less than 2 story; 2.5fin, 2Story as two story or greater; leave 1.5Unf and 2.5Unf as is since they drag down property values**
+Combine 1.5Fin, 1Story, split foyer, split level as less than 2 story; 2.5fin, 2Story as two story or greater; leave 1.5Unf and 2.5Unf as is since they drag down property values
 
 ```{r}
 style_price <- train %>% group_by(HouseStyle) %>% summarize(count=n(),
@@ -200,7 +196,10 @@ style_price
 train$HouseStyle <- fct_collapse(train$HouseStyle, Less2story = c("1Story", "1.5Fin", "SFoyer", "SLvl"))
 
 train$HouseStyle <- fct_collapse(train$HouseStyle, EqMore2story = c("2Story", "2.5Fin"))
-=======
+```
+
+
+### Kyle:
 ```{r}
 cleanpool <- as.character(train_catPredictors$PoolQC)
 cleanpool[is.na(cleanpool)] <- "none"
@@ -253,6 +252,5 @@ train_catPredictors$Electrical <- electrical
 fireplace <- as.character(train_catPredictors$FireplaceQu)
 fireplace[is.na(fireplace)] <- "none"
 train_catPredictors$FireplaceQu <- as.factor(fireplace)
->>>>>>> 744290fa0e3268f7a85360fd0e4e3000e675090c
 ```
 
