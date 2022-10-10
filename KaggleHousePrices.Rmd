@@ -1,6 +1,7 @@
 ---
 title: "Predicting House Prices"
 output:
+  pdf_document: default
   html_document:
     df_print: paged
   pdf_document: default
@@ -150,6 +151,7 @@ test = select(test, -c(GarageCars))
 
 
 ## Handle Categorical Features
+<<<<<<< HEAD
 
 
 # Richard's Features
@@ -198,5 +200,59 @@ style_price
 train$HouseStyle <- fct_collapse(train$HouseStyle, Less2story = c("1Story", "1.5Fin", "SFoyer", "SLvl"))
 
 train$HouseStyle <- fct_collapse(train$HouseStyle, EqMore2story = c("2Story", "2.5Fin"))
+=======
+```{r}
+cleanpool <- as.character(train_catPredictors$PoolQC)
+cleanpool[is.na(cleanpool)] <- "none"
+cleanpool <- as.factor(cleanpool)
+```
+
+```{r}
+cleanfence <- as.character(train_catPredictors$Fence)
+cleanfence[is.na(cleanfence)] <- "none"
+cleanfence <- as.factor(cleanfence)
+```
+
+```{r}
+cleanfunc <- as.character(train_catPredictors$Functional)
+cleanfunc[cleanfunc == 'Min1' | cleanfunc == 'Min2'] <- "Minor"
+cleanfunc[cleanfunc == 'Maj1' | cleanfunc == 'Maj2'] <- "Major"
+cleanfunc[cleanfunc == 'Sev' | cleanfunc == 'Sal'] <- "Severe"
+cleanfunc <- as.factor(cleanfunc)
+```
+
+```{r}
+train_catPredictors$PoolQC <- cleanpool
+train_catPredictors$Fence <- cleanfence
+train_catPredictors$Functional <- cleanfunc
+```
+
+### Mileva: Heating, Electrical, FireplaceQu, HeatingQC, CentralAir
+The processing for the Heating, Electrical, and FireplaceQu predictors is below. The HeatingQC and CentralAir predictors did not require any additional processing. 
+
+```{r}
+# Heating: Collapsed categores with low frequencies into "other"
+heating <- as.factor(train_catPredictors$Heating)
+heating <- fct_other(heating, keep=c("GasA", "GasW"))
+train_catPredictors$Heating <- heating
+```
+
+```{r}
+# Electrical: Collapsed similar categories together and handled missing values
+electrical <- as.character(train_catPredictors$Electrical)
+
+electrical <- fct_collapse(electrical, Fuse=c("FuseA", "FuseF", "FuseP"))
+electrical <- fct_collapse(electrical, Other=c("Mix"))
+electrical[is.na(electrical)] <- "Other"
+
+train_catPredictors$Electrical <- electrical
+```
+
+```{r}
+# Fireplace: Handled missing values
+fireplace <- as.character(train_catPredictors$FireplaceQu)
+fireplace[is.na(fireplace)] <- "none"
+train_catPredictors$FireplaceQu <- as.factor(fireplace)
+>>>>>>> 744290fa0e3268f7a85360fd0e4e3000e675090c
 ```
 

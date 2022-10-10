@@ -5,13 +5,17 @@ Which students work on which variable:
     1. YearBuilt and GarageYrBlt were highly correlated so GarageYrBlt column has been removed
     2. GarageCars and GarageArea were highly correlated so GarageCars column has been removed
 
+[DONE] Mileva: Heating, HeatingQC, CentralAir, Electrical, FireplaceQu
+    1. The categories in Heating, Electrical, and FireplaceQu were collapsed and the <NA> values were replaced. 
+    2. The Electrical and FireplaceQu did not require any additional processing. 
+
 Deniz: Street (graved:6, paved:1454),
        Alley (graved:50, paved:41, NA:1369),
        PavedDrive (Y:1340, P:30, N:90).
        
 Mei: MSZoning, MSSubClass, Condition1/Condition2
 Bernhard: ...
-Richard: ...
+Richard: BldgType, HouseStyle, RoofStyle
 Mei: MSZoning, MSSubClass, Condition1/Condition2
-Thomas: Thomas: RoofMat1, Exterior1st/Exterior2nd, SaleType
-Mileva: Heating, HeatingQC, CentralAir, Electrical
+Thomas: Thomas: RoofMat1, Exterior1st/Exterior2nd, SaleType 
+Kyle: Funcional, Fence, PoolQC
