@@ -3,6 +3,7 @@ title: "Predicting House Prices"
 output:
   html_document:
     df_print: paged
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -149,3 +150,53 @@ test = select(test, -c(GarageCars))
 
 
 ## Handle Categorical Features
+
+
+# Richard's Features
+
+### RoofStyle
+
+**combine flat, shed as other; gambrel, mansard, gable as gable; leave others as is**
+
+```{r}
+roof_price <- train %>% group_by(RoofStyle) %>% summarize(count=n(),
+  mean(SalePrice), sd(SalePrice))
+
+roof_price
+```
+```{r}
+train$RoofStyle <- fct_collapse(train$RoofStyle, Other = c("Flat", "Shed"))
+train$RoofStyle <- fct_collapse(train$RoofStyle, Gable = c("Gable", "Gambrel", "Mansard"))
+```
+
+
+
+### BldgType
+**combine 2FmCon, Duplex as multifamily; leave others as is**
+
+```{r}
+bldg_price <- train %>% group_by(BldgType) %>% summarize(count=n(),
+  mean(SalePrice), sd(SalePrice))
+
+bldg_price
+```
+```{r}
+train$BldgType <- fct_collapse(train$BldgType, MultiFam = c("2fmCon", "Duplex"))
+```
+
+### HouseStyle
+**combine 1.5Fin, 1Story, split foyer, split level as less than 2 story; 2.5fin, 2Story as two story or greater; leave 1.5Unf and 2.5Unf as is since they drag down property values**
+
+```{r}
+style_price <- train %>% group_by(HouseStyle) %>% summarize(count=n(),
+  mean(SalePrice), sd(SalePrice))
+
+style_price 
+```
+
+```{r}
+train$HouseStyle <- fct_collapse(train$HouseStyle, Less2story = c("1Story", "1.5Fin", "SFoyer", "SLvl"))
+
+train$HouseStyle <- fct_collapse(train$HouseStyle, EqMore2story = c("2Story", "2.5Fin"))
+```
+
