@@ -9,14 +9,18 @@ Which students work on which variable:
     1. The categories in Heating, Electrical, and FireplaceQu were collapsed and the <NA> values were replaced. 
     2. The Electrical and FireplaceQu did not require any additional processing. 
 
-Deniz: Street (graved:6, paved:1454),
+[] Deniz: Street (graved:6, paved:1454),
        Alley (graved:50, paved:41, NA:1369),
        PavedDrive (Y:1340, P:30, N:90).
        
-Mei: MSZoning, MSSubClass, Condition1/Condition2
-Bernhard: ...
-Richard: BldgType, HouseStyle, RoofStyle
-Mei: MSZoning, MSSubClass, Condition1/Condition2
-Thomas: Thomas: RoofMat1, Exterior1st/Exterior2nd, SaleType 
-Kyle: Funcional, Fence, PoolQC
-Marina: Neighborhood, GarageType, GarageFinish, GarageQual, GarageCond
+[] Mei: MSZoning, MSSubClass, Condition1/Condition2
+
+[] Richard: BldgType, HouseStyle, RoofStyle
+
+[] Mei: MSZoning, MSSubClass, Condition1/Condition2
+
+[] Thomas: Thomas: RoofMat1, Exterior1st/Exterior2nd, SaleType 
+
+[] Kyle: Funcional, Fence, PoolQC
+
+[] Marina: Neighborhood, GarageType, GarageFinish, GarageQual, GarageCond
