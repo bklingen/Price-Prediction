@@ -353,3 +353,45 @@ fireplace[is.na(fireplace)] <- "none"
 train_catPredictors$FireplaceQu <- as.factor(fireplace)
 ```
 
+### Thomas: RoofMatl, Exterior1st/Exterior2nd, SaleType
+
+# RoofMatl - Dropped
+
+1434/1460 entries in the training set are CompShg.  
+The off-materials aren't meaningfully different price-wise as an 'other' group.  Wood Shingles ('wdshngl') does contain 2 houses in the 99th percentile sale price, but with only 6 entries I don't think it's safe to include.  
+I think we're better off dropping this one.
+```{r}
+train <- select(train, -c(RoofMatl))
+test <- select(test, -c(RoofMatl))
+```
+
+### Exterior1st/2nd
+Fixed the following label mis-matches between columns:Exterior1st - WdShing,CemntBd,BrkComm, Exterior2nd - Wd Shng,CmentBd,Brk Cmn
+
+~90% of these two variables matched.
+In the ~10% that didn't match, Exterior1st is generally a better predictor of sale price than Exterior2nd.
+I converted Exterior2nd into a boolean, TRUE if Exterior1st!=Exterior2nd.
+
+I combined the bottom half of Exterior1st's categories into an 'Other' category.
+  (This leaves 7, but Brick Face/Cement Board seem to be decent categories for predicting sale price, so I didn't want to drop them.)
+
+```{r}
+train$Exterior2nd[train$Exterior2nd=='Wd Shng'] <- 'WdShing'
+train$Exterior2nd[train$Exterior2nd=='CmentBd'] <- 'CemntBd'
+train$Exterior2nd[train$Exterior2nd=='Brk Cmn'] <- 'BrkComm'
+train$Exterior2nd <- train$Exterior1st!=train$Exterior2nd
+train$Exterior1st <- fct_collapse(train$Exterior1st, Other = c("AsbShng","AsphShn","CBlock","ImStucc","BrkComm","Stone","Stucco","WdShing"))
+
+test$Exterior2nd[test$Exterior2nd=='Wd Shng']<- 'WdShing'
+test$Exterior2nd[test$Exterior2nd=='CmentBd']<- 'CemntBd'
+test$Exterior2nd[test$Exterior2nd=='Brk Cmn']<- 'BrkComm'
+test$Exterior2nd <- test$Exterior1st!=test$Exterior2nd
+test$Exterior1st <- fct_collapse(test$Exterior1st, Other = c("AsbShng","AsphShn","CBlock","ImStucc","BrkComm","Stone","Stucco","WdShing"))
+```
+### SaleType
+WD, New, and Court deed/estate were the three most common categories, and all 3 were significant when using SaleType as sole predictor.
+Combined the other categories into 'Other'.
+```{r}
+train$SaleType <- fct_collapse(train$SaleType, Other = c("ConLD", "ConLw", "ConLI", "CWD", "Oth", "Con"))
+test$SaleType <- fct_collapse(test$SaleType, Other = c("ConLD", "ConLw", "ConLI", "CWD", "Oth", "Con"))
+```
