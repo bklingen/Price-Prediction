@@ -149,6 +149,105 @@ test = select(test, -c(GarageCars))
 
 ## Handle Categorical Features
 
+### MSZoning (Mei)
+There are no null/missing values in the training set, but there are a few in the test set
+```{r}
+sum(is.na(train$MSZoning))
+sum(is.na(test$MSZoning))
+```
+Although there are 8 potential categories for this variable, there only exist 5 unique ones in the training and test set. 
+```{r}
+fct_count(train$MSZoning)
+fct_count(test$MSZoning)
+```
+```{r warning=FALSE}
+mszoning.collapse <- function(x) fct_collapse(x,
+                  "FV" = c("FV"),
+                  "RL" = c("RL", "RP"),
+                  "RO" = c("RM", "RH"),
+                  other_level = "other")
+
+train <- train %>% mutate(MSZoning = as.factor(MSZoning), MSZoning = mszoning.collapse(MSZoning))
+test <- test %>% mutate(MSZoning = as.factor(MSZoning), MSZoning = mszoning.collapse(MSZoning))
+```
+```{r}
+fct_count(train$MSZoning)
+```
+
+
+### MSSubClass (Mei)
+There are no null/missing values
+```{r}
+sum(is.na(train$MSSubClass))
+sum(is.na(test$MSSubClass))
+```
+Assuming the 1/2 story refers to a basement level as "(un)finished" terminology typically refers to, the categories will be split as follows (counts in parenthesis):
+  - 1-STORY 1946 & NEWER single-family (536)
+  - 1-STORY single-family other
+    - 30	1-STORY 1945 & OLDER (69)
+    - 40	1-STORY W/FINISHED ATTIC ALL AGES (4)
+    - 45	1-1/2 STORY - UNFINISHED ALL AGES (12)
+    - 50	1-1/2 STORY FINISHED ALL AGES (144)
+  - multi-level single-family non PUD
+    - 60	2-STORY 1946 & NEWER (299)
+    - 70	2-STORY 1945 & OLDER (60)
+    - 75	2-1/2 STORY ALL AGES (16)
+    - 80	SPLIT OR MULTI-LEVEL (58)
+    - 85	SPLIT FOYER (20)
+  - other
+    - 90	DUPLEX - ALL STYLES AND AGES (52)
+    - 120	1-STORY PUD (Planned Unit Development) - 1946 & NEWER (87)
+    - 150	1-1/2 STORY PUD - ALL AGES 
+    - 160	2-STORY PUD - 1946 & NEWER (63)
+    - 180	PUD - MULTILEVEL - INCL SPLIT LEV/FOYER (10)
+    - 190	2 FAMILY CONVERSION - ALL STYLES AND AGES (30)
+ 
+```{r}
+mssubclass.collapse <- function(x) fct_collapse(x,
+                  "1-story single-family 1946 & newer" = c("20"),
+                  "1-story single-family other" = c("30", "40", "45", "50"),
+                  "multi-level single-family non PUD" = c("60", "70", "75", "80", "85"),
+                  other_level = "other")
+
+train <- train %>% mutate(MSSubClass = as.factor(MSSubClass), MSSubClass = mssubclass.collapse(MSSubClass))
+test <- test %>% mutate(MSSubClass = as.factor(MSSubClass), MSSubClass = mssubclass.collapse(MSSubClass))
+```
+```{r}
+fct_count(train$MSSubClass)
+```
+
+
+### Condition1/Condition2 (Mei)
+There are no null/missing values
+```{r}
+sum(is.na(train$Condition1))
+sum(is.na(test$Condition1))
+sum(is.na(train$Condition2))
+sum(is.na(test$Condition2))
+```
+Collapse similar locations together:
+  - All the railroad related locations
+  - All the park related locations
+  - All the street related locations
+This results in only 4 categories:
+  - Normal
+  - Near railroad
+  - Near park
+  - Near arterial or feeder street
+       
+```{r warning=FALSE}
+condition.collapse <- function(x) fct_collapse(x,
+                  RR = c("RRNn", "RRAn", "RRNe", "RRAe"),
+                  Pos = c("PosN", "PosA"),
+                  St = c("Artery", "Feedr"))
+
+train <- train %>% mutate_at(vars(Condition1, Condition2), condition.collapse)
+test <- test %>% mutate_at(vars(Condition1, Condition2), condition.collapse)
+```
+```{r}
+fct_count(train$Condition1)
+```
+
 # Richard's Features
 
 ### RoofStyle
