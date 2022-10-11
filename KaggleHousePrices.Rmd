@@ -103,12 +103,9 @@ cor(train_temp['GarageYrBlt'], train_temp['YearBuilt'])
 cor(test_temp['GarageYrBlt'], test_temp['YearBuilt'])
 ```
 
-As expected, these two columns are quite correlated. Since GarageYrBlt has NaN values and YearBuilt has all the data, we are droping GarageYrBlt from the original dataframes.
+As expected, these two columns are quite correlated.
+We are dropping not dropping any feature by now but will be useful for future  explanations.
 
-```{r}
-train = select(train, -c(GarageYrBlt))
-test = select(test, -c(GarageYrBlt))
-```
 
 ### Marina: GarageCars, GarageArea
 Let's do the same with GarageCars, GarageArea which seem to be correlated.
@@ -140,12 +137,8 @@ cor(train['GarageCars'], train['GarageArea'])
 cor(test_temp['GarageCars'], test_temp['GarageArea'])
 ```
 
-As expected, these two columns are quite correlated, so we are droping GarageCars (which is lees descriptive) from the original dataframes.
-```{r}
-train = select(train, -c(GarageCars))
-test = select(test, -c(GarageCars))
-```
-
+As expected, these two columns are quite correlated. 
+We are not dropping any features by now, but will be useful for future explanations.
 
 ## Handle Categorical Features
 
@@ -394,4 +387,148 @@ Combined the other categories into 'Other'.
 ```{r}
 train$SaleType <- fct_collapse(train$SaleType, Other = c("ConLD", "ConLw", "ConLI", "CWD", "Oth", "Con"))
 test$SaleType <- fct_collapse(test$SaleType, Other = c("ConLD", "ConLw", "ConLI", "CWD", "Oth", "Con"))
+```
+
+### Marina: Neighborhood, GarageType, GarageFinish, GarageQual, GarageCond
+
+```{r}
+### Neighborhood ###
+# Collapse categores with low frequencies into "other"
+
+#Explore counts
+train_catPredictors %>% count(Neighborhood, sort = TRUE)
+```
+
+```{r}
+#Factorize
+neighborhood <- as.factor(train_catPredictors$Neighborhood)
+
+#Convert to "Other" any category that represents less than 2% of the data
+neighborhood <- neighborhood %>% 
+  fct_lump(prop=0.03, other_level='Other')
+
+levels(neighborhood) #New levels of the factor
+```
+
+
+```{r}
+#Update column with new values
+train_catPredictors$Neighborhood <- neighborhood
+```
+
+```{r}
+### GarageType ###
+
+#Explore counts
+train_catPredictors %>% count(GarageType, sort = TRUE)
+```
+```{r}
+#Handle NAs
+#According to the data description, NA means no garage. 
+#Change NA category to "none" to avoid issues.
+garageType <- as.character(train_catPredictors$GarageType)
+garageType[is.na(garageType)] <- "none"
+garageType <- as.factor(garageType)
+```
+
+```{r}
+#Collapse into "Other" categries that represent less than 5% of the data
+garageType <- garageType %>% 
+  fct_lump(prop=0.05, other_level='Other')
+
+#levels(garageType) #New levels of the factor
+```
+
+
+```{r}
+#Update column with new values
+train_catPredictors$GarageType <- garageType
+```
+
+
+```{r}
+### GarageFinish ###
+
+#Explore counts
+train_catPredictors %>% count(GarageFinish, sort = TRUE)
+```
+```{r}
+#Handle NAs
+#According to the data description, NA means no garage. 
+#Change NA category to "none" to avoid issues.
+garageFinish <- as.character(train_catPredictors$GarageFinish)
+garageFinish[is.na(garageFinish)] <- "none"
+garageFinish <- as.factor(garageFinish)
+
+#No need to collapse categories
+```
+
+```{r}
+#Update column with new values
+train_catPredictors$GarageFinish <- garageFinish
+```
+
+
+```{r}
+### GarageQual ###
+
+#Explore counts
+train_catPredictors %>% count(GarageQual, sort = TRUE)
+```
+```{r}
+#Handle NAs
+#According to the data description, NA means no garage. 
+#Change NA category to "none" to avoid issues.
+garageQual <- as.character(train_catPredictors$GarageQual)
+garageQual[is.na(garageQual)] <- "none"
+garageQual <- as.factor(garageQual)
+```
+
+```{r}
+#Collapse categories: 
+# - Let's collapse Ex	(Excellent) and Gd	(Good) into 1 category: Gd
+# - Let's collapse Fa	(Fair) and Po	(Poor) into 1 category: Po
+# - None and TA remains the same
+
+garageQual <- fct_collapse(garageQual, Gd = c("Ex","Gd"))
+garageQual <- fct_collapse(garageQual, Po = c("Fa","Po"))
+
+```
+
+
+```{r}
+#Update column with new values
+train_catPredictors$GarageQual <- garageQual
+```
+
+
+```{r}
+### GarageCond ###
+
+#Explore counts
+train_catPredictors %>% count(GarageCond, sort = TRUE)
+```
+```{r}
+#Handle NAs
+#According to the data description, NA means no garage. 
+#Change NA category to "none" to avoid issues.
+garageCond <- as.character(train_catPredictors$GarageCond)
+garageCond[is.na(garageCond)] <- "none"
+garageCond <- as.factor(garageCond)
+```
+
+```{r}
+#Collapse categories: 
+# - Let's collapse Ex	(Excellent) and Gd	(Good) into 1 category: Gd
+# - Let's collapse Fa	(Fair) and Po	(Poor) into 1 category: Po
+# - None and TA remains the same
+
+garageCond <- fct_collapse(garageCond, Gd = c("Ex","Gd"))
+garageCond <- fct_collapse(garageCond, Po = c("Fa","Po"))
+
+```
+
+```{r}
+#Update column with new values
+train_catPredictors$GarageCond <- garageCond
 ```
