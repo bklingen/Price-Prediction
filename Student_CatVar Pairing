@@ -20,6 +20,10 @@ Which students work on which variable:
 [] Mei: MSZoning, MSSubClass, Condition1/Condition2
 
 [] Thomas: RoofMat1, Exterior1st/Exterior2nd, SaleType 
+    1. Dropped RoofMatl.
+    2. Collapsed categories in Exterior1st.
+    3. Converted Exterior2nd to a boolean for multiple materials.
+    4. Combined categories in SaleType.
 
 [] Kyle: Funcional, Fence, PoolQC
 
