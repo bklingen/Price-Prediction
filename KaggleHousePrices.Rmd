@@ -532,3 +532,46 @@ garageCond <- fct_collapse(garageCond, Po = c("Fa","Po"))
 #Update column with new values
 train_catPredictors$GarageCond <- garageCond
 ```
+
+
+
+
+### Paul: LotShape, LotConfig, LandContour
+
+Fortunately there are no NA values in  either the test or train sets.
+```{r}
+sum(is.na(train$LotShape))
+sum(is.na(test$LotShape))
+sum(is.na(train$LotConfig))
+sum(is.na(test$LotConfig))
+sum(is.na(train$LandContour))
+sum(is.na(test$LandContour))
+```
+
+```{r}
+fct_count(train$LotShape)
+fct_count(test$LotShape)
+fct_count(train$LotConfig)
+fct_count(test$LotConfig)
+fct_count(train$LandContour)
+fct_count(test$LandContour)
+```
+
+All of these variables are highly imbalanced. In each there is one category that represents a "regular" shape, configuration, or land contour, which amount for ~2/3 or more of the total instances. Thus, I collapsed all of the less represented "irregular" categories into one.
+
+```{r}
+train$LotShape <- fct_collapse(train$LotShape, Irregular = c("IR1", "IR2", "IR3"))
+train$LotConfig <- fct_collapse(train$LotConfig, Other = c("Corner","CulDSac", "FR2", "FR3"))
+train$LandContour <- fct_collapse(train$LandContour, NonLvl = c("Bnk", "HLS", "Low"))
+```
+
+
+```{r}
+fct_count(train$LotShape)
+fct_count(train$LotConfig)
+fct_count(train$LandContour)
+```
+
+
+
+
