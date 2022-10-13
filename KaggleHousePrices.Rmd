@@ -45,9 +45,16 @@ train_catPredictors = train %>% select(where(is.character))
 dim(train_quantPredictors)
 dim(train_catPredictors)
 ```
+
+Let's quickly do the same split for the test data:
+```{r}
+test_quantPredictors = test %>% select(where(is.numeric))
+test_catPredictors = test %>% select(where(is.character))
+```
 Let's transform the categorical predictors into factors, which should make it easier to combine categories, create a category like "other", etc. 
 ```{r}
-train_catPredictors = train_catPredictors %>% transmute_all(as.factor) 
+train_catPredictors = train_catPredictors %>% transmute_all(as.factor)
+test_catPredictors = test_catPredictors %>% transmute_all(as.factor)
 ```
 
 First, let's see the category names and frequency for each variable:
@@ -60,85 +67,6 @@ for(i in 1:ncol(train_catPredictors)) {
 }
 ```
 
-## Handle Numerical Features
-### Marina: YearBuilt, GarageYrBlt 
-Having a look at the data, I had the feeling that YearBuilt and GarageYrBlt would be quite correlated, because a garage is usually built at the same time as the house itself. Let's check:
-
-```{r}
-#First, check missing values in train and test set
-
-#Null values in YearBuilt column
-sum(is.na(train$YearBuilt))
-sum(is.na(test$YearBuilt))
-```
-No missing values in YearBuilt column
-
-```{r}
-
-#Null values in GarageYrBlt column
-sum(is.na(train$GarageYrBlt))
-sum(is.na(test$GarageYrBlt))
-
-```
-We have some missing values in GarageYrBlt column in both the train and the test set. 
-Since we want to check the correlation with another feature, we don't want to impute values or remove rows. By now we are just going to create a temporary dataframe that does not include the rows with missing values in GarageYrBlt column
-```{r}
-# Make a temporary dataframe without the rows where GarageYrBlt column in NAN
-train_temp = train %>% drop_na("GarageYrBlt")
-test_temp = test %>% drop_na("GarageYrBlt")
-```
-
-
-```{r}
-#Check that we dont for missing values to make sure we got rid of them
-sum(is.na(train_temp$GarageYrBlt))
-sum(is.na(test_temp$GarageYrBlt))
-
-```
-
-Now we don't have NaNs, we can check the correlation between YearBuilt, GarageYrBlt
-```{r}
-# Chekcing correlations with GarageYrBlt
-cor(train_temp['GarageYrBlt'], train_temp['YearBuilt'])
-cor(test_temp['GarageYrBlt'], test_temp['YearBuilt'])
-```
-
-As expected, these two columns are quite correlated.
-We are dropping not dropping any feature by now but will be useful for future  explanations.
-
-
-### Marina: GarageCars, GarageArea
-Let's do the same with GarageCars, GarageArea which seem to be correlated.
-```{r}
-#First, check missing values in train and test set
-
-#Null values in GarageCars column
-sum(is.na(train$GarageCars))
-sum(is.na(test$GarageCars))
-```
-```{r}
-#Null values in GarageArea column
-sum(is.na(train$GarageArea))
-sum(is.na(test$GarageArea))
-```
-We have one missing values in GarageCars and GarageArea columns in the test set. 
-Since we want to check the correlation with another feature, we don't want to impute values or remove rows. By now we are just going to create a temporary dataframe that does not include the rows with missing values in GarageCars and GarageArea columns
-```{r}
-# Make a temporary dataframe without the rows where GarageCars and GarageArea column in NAN
-test_temp = test %>% drop_na("GarageCars", "GarageArea")
-sum(is.na(test_temp$GarageCars))
-sum(is.na(test_temp$GarageArea))
-```
-
-Now we don't have NaNs, we can check the correlation between GarageCars and GarageArea
-```{r}
-# Chekcing correlation between GarageCars and GarageArea
-cor(train['GarageCars'], train['GarageArea'])
-cor(test_temp['GarageCars'], test_temp['GarageArea'])
-```
-
-As expected, these two columns are quite correlated. 
-We are not dropping any features by now, but will be useful for future explanations.
 
 ## Handle Categorical Features
 
@@ -258,6 +186,11 @@ roof_price
 train$RoofStyle <- fct_collapse(train$RoofStyle, Other = c("Flat", "Shed"))
 train$RoofStyle <- fct_collapse(train$RoofStyle, Gable = c("Gable", "Gambrel", "Mansard"))
 ```
+Let's do the same on the testing dataset:
+```{r}
+test$RoofStyle <- fct_collapse(test$RoofStyle, Other = c("Flat", "Shed"))
+test$RoofStyle <- fct_collapse(test$RoofStyle, Gable = c("Gable", "Gambrel", "Mansard"))
+```
 
 
 ### BldgType
@@ -273,6 +206,10 @@ bldg_price
 ```{r}
 train$BldgType <- fct_collapse(train$BldgType, MultiFam = c("2fmCon", "Duplex"))
 ```
+Let's do the same on the testing dataset:
+```{r}
+test$BldgType <- fct_collapse(test$BldgType, MultiFam = c("2fmCon", "Duplex"))
+```
 
 ### HouseStyle
 Combine 1.5Fin, 1Story, split foyer, split level as less than 2 story; 2.5fin, 2Story as two story or greater; leave 1.5Unf and 2.5Unf as is since they drag down property values
@@ -286,8 +223,13 @@ style_price
 
 ```{r}
 train$HouseStyle <- fct_collapse(train$HouseStyle, Less2story = c("1Story", "1.5Fin", "SFoyer", "SLvl"))
-
 train$HouseStyle <- fct_collapse(train$HouseStyle, EqMore2story = c("2Story", "2.5Fin"))
+```
+
+And on the test data:
+```{r}
+test$HouseStyle <- fct_collapse(test$HouseStyle, Less2story = c("1Story", "1.5Fin", "SFoyer", "SLvl"))
+test$HouseStyle <- fct_collapse(test$HouseStyle, EqMore2story = c("2Story", "2.5Fin"))
 ```
 
 
@@ -313,10 +255,38 @@ cleanfunc <- as.factor(cleanfunc)
 ```
 
 ```{r}
-train_catPredictors$PoolQC <- cleanpool
-train_catPredictors$Fence <- cleanfence
-train_catPredictors$Functional <- cleanfunc
+train$PoolQC <- cleanpool
+train$Fence <- cleanfence
+train$Functional <- cleanfunc
 ```
+
+We need to do the same for the test dataset, so I just copied the code block and replaced "train" by "test":
+```{r}
+cleanpool <- as.character(test_catPredictors$PoolQC)
+cleanpool[is.na(cleanpool)] <- "none"
+cleanpool <- as.factor(cleanpool)
+```
+
+```{r}
+cleanfence <- as.character(test_catPredictors$Fence)
+cleanfence[is.na(cleanfence)] <- "none"
+cleanfence <- as.factor(cleanfence)
+```
+
+```{r}
+cleanfunc <- as.character(test_catPredictors$Functional)
+cleanfunc[cleanfunc == 'Min1' | cleanfunc == 'Min2'] <- "Minor"
+cleanfunc[cleanfunc == 'Maj1' | cleanfunc == 'Maj2'] <- "Major"
+cleanfunc[cleanfunc == 'Sev' | cleanfunc == 'Sal'] <- "Severe"
+cleanfunc <- as.factor(cleanfunc)
+```
+
+```{r}
+test$PoolQC <- cleanpool
+test$Fence <- cleanfence
+test$Functional <- cleanfunc
+```
+
 
 ### Mileva: Heating, Electrical, FireplaceQu, HeatingQC, CentralAir
 The processing for the Heating, Electrical, and FireplaceQu predictors is below. The HeatingQC and CentralAir predictors did not require any additional processing. 
@@ -325,7 +295,7 @@ The processing for the Heating, Electrical, and FireplaceQu predictors is below.
 # Heating: Collapsed categores with low frequencies into "other"
 heating <- as.factor(train_catPredictors$Heating)
 heating <- fct_other(heating, keep=c("GasA", "GasW"))
-train_catPredictors$Heating <- heating
+train$Heating <- heating
 ```
 
 ```{r}
@@ -336,15 +306,42 @@ electrical <- fct_collapse(electrical, Fuse=c("FuseA", "FuseF", "FuseP"))
 electrical <- fct_collapse(electrical, Other=c("Mix"))
 electrical[is.na(electrical)] <- "Other"
 
-train_catPredictors$Electrical <- electrical
+train$Electrical <- electrical
 ```
 
 ```{r}
 # Fireplace: Handled missing values
 fireplace <- as.character(train_catPredictors$FireplaceQu)
 fireplace[is.na(fireplace)] <- "none"
-train_catPredictors$FireplaceQu <- as.factor(fireplace)
+train$FireplaceQu <- as.factor(fireplace)
 ```
+
+Need to do the same for test dataset:
+```{r}
+# Heating: Collapsed categores with low frequencies into "other"
+heating <- as.factor(test_catPredictors$Heating)
+heating <- fct_other(heating, keep=c("GasA", "GasW"))
+test$Heating <- heating
+```
+
+```{r}
+# Electrical: Collapsed similar categories together and handled missing values
+electrical <- as.character(test_catPredictors$Electrical)
+
+electrical <- fct_collapse(electrical, Fuse=c("FuseA", "FuseF", "FuseP"))
+electrical <- fct_collapse(electrical, Other=c("Mix"))
+electrical[is.na(electrical)] <- "Other"
+
+test$Electrical <- electrical
+```
+
+```{r}
+# Fireplace: Handled missing values
+fireplace <- as.character(test_catPredictors$FireplaceQu)
+fireplace[is.na(fireplace)] <- "none"
+test$FireplaceQu <- as.factor(fireplace)
+```
+
 
 ### Thomas: RoofMatl, Exterior1st/Exterior2nd, SaleType
 
@@ -413,7 +410,31 @@ levels(neighborhood) #New levels of the factor
 
 ```{r}
 #Update column with new values
-train_catPredictors$Neighborhood <- neighborhood
+train$Neighborhood <- neighborhood
+```
+
+Need to do the same on test data:
+```{r}
+#Factorize
+neighborhood <- as.factor(test_catPredictors$Neighborhood)
+
+#Convert to "Other" any category that represents less than 2% of the data
+neighborhood <- neighborhood %>% 
+  fct_lump(prop=0.03, other_level='Other')
+
+levels(neighborhood) #New levels of the factor
+```
+
+
+```{r}
+#Update column with new values
+test$Neighborhood <- neighborhood
+```
+
+**Anyone sees the issue??**
+```{r}
+table(train$Neighborhood)
+table(test$Neighborhood)
 ```
 
 ```{r}
@@ -422,6 +443,7 @@ train_catPredictors$Neighborhood <- neighborhood
 #Explore counts
 train_catPredictors %>% count(GarageType, sort = TRUE)
 ```
+
 ```{r}
 #Handle NAs
 #According to the data description, NA means no garage. 
@@ -442,7 +464,12 @@ garageType <- garageType %>%
 
 ```{r}
 #Update column with new values
-train_catPredictors$GarageType <- garageType
+train$GarageType <- garageType
+```
+
+**Attention!! Need to do the same on the test data:** 
+```{r}
+
 ```
 
 
@@ -465,8 +492,25 @@ garageFinish <- as.factor(garageFinish)
 
 ```{r}
 #Update column with new values
-train_catPredictors$GarageFinish <- garageFinish
+train$GarageFinish <- garageFinish
 ```
+
+Need to do the same for the test data:
+```{r}
+#Handle NAs
+#According to the data description, NA means no garage. 
+#Change NA category to "none" to avoid issues.
+garageFinish <- as.character(test_catPredictors$GarageFinish)
+garageFinish[is.na(garageFinish)] <- "none"
+garageFinish <- as.factor(garageFinish)
+#No need to collapse categories
+```
+
+```{r}
+#Update column with new values
+test$GarageFinish <- garageFinish
+```
+
 
 
 ```{r}
@@ -475,6 +519,7 @@ train_catPredictors$GarageFinish <- garageFinish
 #Explore counts
 train_catPredictors %>% count(GarageQual, sort = TRUE)
 ```
+
 ```{r}
 #Handle NAs
 #According to the data description, NA means no garage. 
@@ -492,13 +537,38 @@ garageQual <- as.factor(garageQual)
 
 garageQual <- fct_collapse(garageQual, Gd = c("Ex","Gd"))
 garageQual <- fct_collapse(garageQual, Po = c("Fa","Po"))
-
 ```
 
 
 ```{r}
 #Update column with new values
-train_catPredictors$GarageQual <- garageQual
+train$GarageQual <- garageQual
+```
+
+Need to do the same for test data:
+```{r}
+#Handle NAs
+#According to the data description, NA means no garage. 
+#Change NA category to "none" to avoid issues.
+garageQual <- as.character(test_catPredictors$GarageQual)
+garageQual[is.na(garageQual)] <- "none"
+garageQual <- as.factor(garageQual)
+```
+
+```{r}
+#Collapse categories: 
+# - Let's collapse Ex	(Excellent) and Gd	(Good) into 1 category: Gd
+# - Let's collapse Fa	(Fair) and Po	(Poor) into 1 category: Po
+# - None and TA remains the same
+
+garageQual <- fct_collapse(garageQual, Gd = c("Ex","Gd"))
+garageQual <- fct_collapse(garageQual, Po = c("Fa","Po"))
+```
+
+
+```{r}
+#Update column with new values
+test$GarageQual <- garageQual
 ```
 
 
@@ -508,6 +578,7 @@ train_catPredictors$GarageQual <- garageQual
 #Explore counts
 train_catPredictors %>% count(GarageCond, sort = TRUE)
 ```
+
 ```{r}
 #Handle NAs
 #According to the data description, NA means no garage. 
@@ -530,9 +601,34 @@ garageCond <- fct_collapse(garageCond, Po = c("Fa","Po"))
 
 ```{r}
 #Update column with new values
-train_catPredictors$GarageCond <- garageCond
+train$GarageCond <- garageCond
 ```
 
+Need to do the same with test data:
+```{r}
+#Handle NAs
+#According to the data description, NA means no garage. 
+#Change NA category to "none" to avoid issues.
+garageCond <- as.character(test_catPredictors$GarageCond)
+garageCond[is.na(garageCond)] <- "none"
+garageCond <- as.factor(garageCond)
+```
+
+```{r}
+#Collapse categories: 
+# - Let's collapse Ex	(Excellent) and Gd	(Good) into 1 category: Gd
+# - Let's collapse Fa	(Fair) and Po	(Poor) into 1 category: Po
+# - None and TA remains the same
+
+garageCond <- fct_collapse(garageCond, Gd = c("Ex","Gd"))
+garageCond <- fct_collapse(garageCond, Po = c("Fa","Po"))
+
+```
+
+```{r}
+#Update column with new values
+test$GarageCond <- garageCond
+```
 
 
 
@@ -571,6 +667,14 @@ fct_count(train$LotShape)
 fct_count(train$LotConfig)
 fct_count(train$LandContour)
 ```
+
+Need to do the same for the test data:
+```{r}
+test$LotShape <- fct_collapse(test$LotShape, Irregular = c("IR1", "IR2", "IR3"))
+test$LotConfig <- fct_collapse(test$LotConfig, Other = c("Corner","CulDSac", "FR2", "FR3"))
+test$LandContour <- fct_collapse(test$LandContour, NonLvl = c("Bnk", "HLS", "Low"))
+```
+
 
 
 
