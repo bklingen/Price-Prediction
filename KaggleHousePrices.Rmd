@@ -6,6 +6,7 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(tidy.opts=list(width.cutoff=70))
 ```
 
 ## Kaggle Competition
@@ -15,7 +16,6 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 library(tidyverse)
-library(tidyr)
 ## Load Training Data
 path_traindata <- 'https://raw.githubusercontent.com/bklingen/Price-Prediction/main/train.csv'
 train <- read_csv(path_traindata)
@@ -378,6 +378,20 @@ test$Exterior2nd[test$Exterior2nd=='Brk Cmn']<- 'BrkComm'
 test$Exterior2nd <- test$Exterior1st!=test$Exterior2nd
 test$Exterior1st <- fct_collapse(test$Exterior1st, Other = c("AsbShng","AsphShn","CBlock","ImStucc","BrkComm","Stone","Stucco","WdShing"))
 ```
+Bernhard: I also changed `ExterCond`:
+```{r}
+table(train$ExterCond)
+table(test$ExterCond)
+```
+`Po` and `Ex` are rather uncommon, so we collapse them all into "other": 
+```{r}
+train$ExterCond = fct_collapse(train$ExterCond, other=c("Ex", "Po"))
+test$ExterCond = fct_collapse(test$ExterCond, other=c("Ex", "Po"))
+
+summary(train$ExterCond)
+summary(test$ExterCond)
+```
+
 ### SaleType
 WD, New, and Court deed/estate were the three most common categories, and all 3 were significant when using SaleType as sole predictor.
 Combined the other categories into 'Other'.
@@ -466,7 +480,14 @@ train$GarageType <- garageType
 
 **Attention!! Need to do the same on the test data:** 
 ```{r}
-
+garageType <- as.character(test$GarageType)
+garageType[is.na(garageType)] <- "none"
+garageType <- as.factor(garageType)
+garageType <- garageType %>% 
+  fct_lump(prop=0.05, other_level='Other')
+levels(garageType)
+levels(train$GarageType)
+test$GarageType <- garageType
 ```
 
 
@@ -627,7 +648,7 @@ garageCond <- fct_collapse(garageCond, Po = c("Fa","Po"))
 test$GarageCond <- garageCond
 ```
 
-
+Note: We also need to discuss the NA's in the numerical variable GarageYrBlt, see later.
 
 ### Paul: LotShape, LotConfig, LandContour
 
@@ -672,7 +693,305 @@ test$LotConfig <- fct_collapse(test$LotConfig, Other = c("Corner","CulDSac", "FR
 test$LandContour <- fct_collapse(test$LandContour, NonLvl = c("Bnk", "HLS", "Low"))
 ```
 
+## First Try for building a predictive model, using just one variable, but as a smooth function:
+```{r}
+library(splines)
+plot(train$SalePrice ~ train$GrLivArea)
+plot(log(train$SalePrice) ~ train$GrLivArea)
+```
+Better to log-transform response
+```{r}
+fit1 = lm(log(SalePrice) ~ ns(GrLivArea, df=10), data=train)
+seqGrLivArea = seq(min(train$GrLivArea), max(train$GrLivArea), length.out=200)
+predictedSpline = predict(fit1, newdata = data.frame(GrLivArea=seqGrLivArea))
+ggplot(data=train, 
+       aes(x=GrLivArea, 
+           y=log(SalePrice)
+       )
+  ) +
+  geom_point(pch=21, fill="red", size=1.2, alpha=0.5) +
+  geom_line(
+    data = data.frame(
+      x = seqGrLivArea,
+      y = predictedSpline
+    ),
+    aes(
+      x=x,
+      y=y
+    ),
+    color = "blue", size = 1
+  )
+```
+Preparing the dataset with the predicted sale prices for the test data:
+```{r}
+predicted.SalePrice = exp(predict(fit1, newdata=data.frame(GrLivArea = test$GrLivArea)))
+SubmitDF = data.frame(Id=test$Id, SalePrice=predicted.SalePrice)
+write.csv(file='C:\\Teaching\\NewCollege\\StatsTopics\\Submission1.csv', SubmitDF, row.names = FALSE)
+```
 
+Submitting this file to the Kaggle competition, I obtained a "Prediction error", measures as 
+$$
+\sum (\log(\hat{y}_i) - \log(y_i))^2
+$$
+of 0.28857, where $\hat{y}_i$ is my prediction of the sale price of the $i$th house in the test data, and $y_i$ is the actual sale price only known to Kaggle.
+
+## Second Try, including all predictors!
+If we include all predictors, one issue is that a few predictors might have a lot of NA values, and then the corresponding observation is not used in the fit. (You find this out when you try to fit the full model.) Let's see which variables have the most NA's.
+```{r}
+train %>%
+  summarize(across(everything(), ~sum(is.na(.x)))) %>%
+  sort(decreasing=TRUE)
+dim(train)
+```
+For the variable `MiscFeature`, almost all values are missing. However, looking in the data description file, this actually means that the house simply doesn't have any other features. So, we set the NA's to "none", in both the train and test datasets. The same applies to `Alley`, where an NA means "none":
+```{r}
+train$MiscFeature = fct_explicit_na(train$MiscFeature, na_level="none")
+test$MiscFeature = fct_explicit_na(test$MiscFeature, na_level="none")
+
+train$Alley = fct_explicit_na(train$Alley, na_level="none")
+test$Alley = fct_explicit_na(test$Alley, na_level="none")
+```
+For `LotFrontage`, the missing values are genuine. (But lets hope that the value being missing has no connection to the sales price of a house.)
+
+Another issue with fitting a full model is the number of unique values a predictor has. If it only has **one unique value (or one unique factor level)**, then it doesn't vary, i.e., it is a constant. This causes issues because then the design matrix $X$ is not full rank. The column for the intercept is a column of all 1's, and then each column for a predictor which is constant is also a column of a fixed number. This causes a linear dependency between these columns, and the design matrix is not full rank.
+
+First, lets turn the character variables into factors, both in the training and testing data. This will pay off later:
+```{r}
+train = train %>% mutate(across(where(is.character), as.factor))
+test = test %>% mutate(across(where(is.character), as.factor))
+```
+
+Let's find the predictors which have constant values throughout:
+```{r}
+train %>%
+  summarize(across(everything(), ~length(unique(.x)))) %>%
+  sort()
+```
+There doesn't seem to be a variable that has only one unique value or one unique factor level. So we should be good to go.
+
+Having done/checked all that, we are ready to fit the full model with all variables. However, using `> fit2 = lm(log(SalePrice) ~ . , data=train %>% select(-Id, -SalePrice))`, I ran into a problem, where R shows the error message `contrasts can be applied only to factors with 2 or more levels`. 
+
+With trial and error, I saw that we can fit a model with the first 8 predictors, but when we include 'Utilities', there is an issue
+```{r}
+fit2 = lm(log(train$SalePrice) ~ . , data=train[,2:9])
+summary(fit2)
+```
+
+What is going on with utilities:
+```{r}
+summary(train$Utilities)
+```
+We see that it is almost constant! There is only one observation with a different utility type. Probably, that observation has some missing values on some other variables, and hence is removed from the design matrix, making it an all constant predictor. Let's check:
+```{r}
+train[train$Utilities == 'NoSeWa',]
+```
+There we go, `LotFrontage` is `NA` for this particular house, so it is removed, and the remaining houses all have the same utility type.
+
+
+## Removing/Replacing Missing Values 
+It is best to get the training dataset that has no missing values (since they will be discarded in the fitting process of the full model anyway), and then check if any other predictors are constant. Which variables still have a lot of missing values:
+```{r}
+train %>%
+  summarize(across(everything(), ~sum(is.na(.x)))) %>%
+  sort(decreasing = TRUE)
+```
+For now, I'm going to drop `LotFrontage` from consideration, although we could impute values. I'm also going to drop `GarageYrBlt` from consideration, because it has around 80 missing values for those garages where there is no information. Since we have info on the garage from other variables, I rather keep 81 observations in the dataset, but not include `GarageYrBlt`. So, I'm going to drop `GarageYrBlt` from the list of predictors:
+```{r}
+train = train %>% select(-LotFrontage, -GarageYrBlt)
+test = test %>% select(-LotFrontage, -GarageYrBlt)
+```
+
+We now need to handle the Basement values. We need to replace the NA's with "none":
+```{r}
+train$BsmtQual = fct_explicit_na(train$BsmtQual, na_level="none")
+train$BsmtCond = fct_explicit_na(train$BsmtCond, na_level="none")
+train$BsmtExposure = fct_explicit_na(train$BsmtExposure, na_level="none")
+train$BsmtFinType1 = fct_explicit_na(train$BsmtFinType1, na_level="none")
+train$BsmtFinType2 = fct_explicit_na(train$BsmtFinType2, na_level="none")
+
+test$BsmtQual = fct_explicit_na(test$BsmtQual, na_level="none")
+test$BsmtCond = fct_explicit_na(test$BsmtCond, na_level="none")
+test$BsmtExposure = fct_explicit_na(test$BsmtExposure, na_level="none")
+test$BsmtFinType1 = fct_explicit_na(test$BsmtFinType1, na_level="none")
+test$BsmtFinType2 = fct_explicit_na(test$BsmtFinType2, na_level="none")
+
+train %>%
+  summarize(across(everything(), ~sum(is.na(.x)))) %>%
+  sort(decreasing = TRUE)
+```
+For `MasVnrType`, I will introduce a new category "missing", but for `MasVnrArea` I will just imput 0 for those 8 missing areas: 
+```{r}
+summary(train$MasVnrType)
+train$MasVnrType = fct_explicit_na(train$MasVnrType, na_level="missing")
+train$MasVnrArea[is.na(train$MasVnrArea)] = 0
+
+test$MasVnrType = fct_explicit_na(test$MasVnrType, na_level="missing")
+test$MasVnrArea[is.na(test$MasVnrArea)] = 0
+```
+
+We now have no missing predictor values in the training data:
+```{r}
+dim(train)
+dim(train %>% drop_na())
+```
+
+Let's now revisit check if any predictors are constant:
+```{r}
+train %>%
+  summarize(across(everything(), ~length(unique(.x)))) %>%
+  sort()
+```
+Seems fine, although for `Utilities`:
+```{r}
+summary(train$Utilities)
+```
+
+This means we also need to drop `Utilities` from the test data.
+```{r}
+train =  train %>% select(-Utilities)
+test =  test %>% select(-Utilities)
+```
+
+## NA's in Test Data
+Just like in the training dataset, we might have some NA's in the test data:
+```{r}
+isNAtest = apply(test,1,function(x) any(is.na(x)))
+sum(isNAtest)
+```
+We still have 11 observations with at least one missing predictor. This is a problem since when we use all predictors, we will not be able to obtain a predicted sales price for these 11 houses.
+Which predictors have the most missing values:
+```{r}
+test %>%
+  summarize(across(everything(), ~sum(is.na(.x)))) %>%
+  sort(decreasing = TRUE)
+```
+### MSZoning:
+```{r}
+summary(train$MSZoning)
+summary(test$MSZoning)
+test$MSZoning = fct_explicit_na(test$MSZoning, na_level="other")
+summary(test$MSZoning)
+```
+### BsmtFullBath:
+```{r}
+summary(train$BsmtFullBath)
+summary(test$BsmtFullBath)
+test$BsmtFullBath[is.na(test$BsmtFullBath)] = 0
+```
+### BsmtHalfBath:
+```{r}
+summary(train$BsmtHalfBath)
+summary(test$BsmtHalfBath)
+test$BsmtHalfBath[is.na(test$BsmtHalfBath)] = 0
+```
+### Functional:
+```{r}
+summary(train$Functional)
+summary(test$Functional)
+train$Functional = train$Functional == "Typ"
+test$Functional = test$Functional == "Typ"
+test$Functional[is.na(test$Functional)] = TRUE
+summary(train$Functional)
+summary(test$Functional)
+```
+### Exterior1st:
+```{r}
+summary(train$Exterior1st)
+summary(test$Exterior1st)
+test$Exterior1st <- fct_explicit_na(test$Exterior1st, na_level="Other")
+summary(test$Exterior1st)
+```
+### Exterior2nd:
+```{r}
+summary(train$Exterior2nd)
+summary(test$Exterior2nd)
+test$Exterior2nd[is.na(test$Exterior2nd)] = FALSE
+```
+### BsmtFinSF1
+```{r}
+summary(train$BsmtFinSF1)
+summary(test$BsmtFinSF1)
+test$BsmtFinSF1[is.na(test$BsmtFinSF1)] = 0
+```
+### BsmtFinSF2
+```{r}
+summary(train$BsmtFinSF2)
+summary(test$BsmtFinSF2)
+test$BsmtFinSF2[is.na(test$BsmtFinSF2)] = 0
+```
+### BsmtUnfSF
+```{r}
+summary(train$BsmtUnfSF)
+summary(test$BsmtUnfSF)
+test$BsmtUnfSF[is.na(test$BsmtUnfSF)] = 460
+```
+### TotalBsmtSF
+```{r}
+summary(train$TotalBsmtSF)
+summary(test$TotalBsmtSF)
+test$TotalBsmtSF[is.na(test$TotalBsmtSF)] = 988
+```
+### KitchenQual
+```{r}
+summary(train$KitchenQual)
+summary(test$KitchenQual)
+test$KitchenQual[is.na(test$KitchenQual)] = "TA"
+```
+### GarageCars
+```{r}
+summary(train$GarageCars)
+summary(test$GarageCars)
+test$GarageCars[is.na(test$GarageCars)] = 1.766
+```
+### GarageArea
+```{r}
+summary(train$GarageArea)
+summary(test$GarageArea)
+test$GarageArea[is.na(test$GarageArea)] = 480
+```
+### SaleType
+```{r}
+summary(train$SaleType)
+summary(test$SaleType)
+test$SaleType[is.na(test$SaleType)] = "Other"
+```
+
+
+## Fitting the model with almost all variables
+
+We can now fit the full model:
+```{r}
+SalePrice = train$SalePrice
+HouseId = train$Id #just in case we need it
+train = train %>% select(-Id, -SalePrice)
+fit2 = lm(log(SalePrice) ~ . , data=train)
+```
+
+We can now try to predict the sales price based on the variables in the test data, since we have addressed all missing values in th test data:
+```{r error = TRUE}
+predicted.SalePrice2 = exp(predict(fit2, newdata=test))
+```
+Preparing the dataset with the predicted sale prices for the test data:
+```{r}
+SubmitDF = data.frame(Id=test$Id, SalePrice=predicted.SalePrice2)
+write.csv(file='C:\\Teaching\\NewCollege\\StatsTopics\\Submission2.csv', SubmitDF, row.names = FALSE)
+```
+
+Interestingly, using all these variables, the prediction score did not go down by much. It is now 0.26450. What is the relationship between our predictions based on the two models:
+```{r}
+plot(predicted.SalePrice2 ~ predicted.SalePrice)
+```
+This is pretty telling. Just for a few houses (three), we predicted a much higher price with the second model compared to the first. Which houses are these:
+```{r}
+SubmitDF %>% slice_max(SalePrice,n=8)
+```
+For the house with ID 2600 in the test data, we predicted a sales price of over 22 million! The error alone in this prediction could be huge!
+To find out, I'm replacing just the prediction for the 5 most expensive predicted prices with the maximum sales price found in the training data.
+```{r}
+SubmitDF$SalePrice[SubmitDF$Id %in% c(2600, 2504, 2421, 2550, 2711)] = max(SalePrice)
+write.csv(file='C:\\Teaching\\NewCollege\\StatsTopics\\Submission3.csv', SubmitDF, row.names = FALSE)
+```
+Yes, the prediction error went down to 0.19609!
 
 
 
