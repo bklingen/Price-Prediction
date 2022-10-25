@@ -19,6 +19,45 @@ source(knitr::purl("../KaggleHousePrices.Rmd", quiet = TRUE))
 
 ```{r libraries, include=FALSE}
 library(splines)
+library(MASS)
+```
+
+```{r}
+#colnames(train)
+lm.obj<-lm(SalePrice ~ .,data=train)
+#summary(lm.obj)
+lm.bAIC<-stepAIC(lm.obj,direction=c("backward"))
+lm.fAIC<-stepAIC(lm.obj,direction=c("forward"))
+lm.dAIC<-stepAIC(lm.obj,direction=c("both"))
+
+bAIC.prediction<-predict(lm.bAIC, interval = "prediction")
+fAIC.prediction<-predict(lm.fAIC,interval="prediction")
+dAIC.prediction<-predict(lm.dAIC,interval="prediction")
 ```
 
 
+```{r}
+plot(lm.bAIC,which=c(1,2,3,4))
+bAIC.prediction<-predict(lm.bAIC, interval = "prediction")
+```
+
+```{r}
+plot(lm.fAIC,which=c(1,2,3,4))
+```
+
+```{r}
+plot(lm.dAIC,which=c(1,2,3,4))
+```
+
+```{r}
+train[c(524,692,1171),]$SalePrice
+quantile(train$SalePrice,na.rm=TRUE,probs=c(0,.05,.25,.50,.75,.95,1))
+quantile(bAIC.prediction,na.rm=TRUE,probs=c(0,.05,.25,.50,.75,.95,1))
+quantile(fAIC.prediction,na.rm=TRUE,probs=c(0,.05,.25,.50,.75,.95,1))
+quantile(dAIC.prediction,na.rm=TRUE,probs=c(0,.05,.25,.50,.75,.95,1))
+```
+```{r}
+c(summary(lm.bAIC)$fstatistic,summary(lm.bAIC)$r.squared)
+c(summary(lm.fAIC)$fstatistic,summary(lm.fAIC)$r.squared)
+c(summary(lm.dAIC)$fstatistic,summary(lm.dAIC)$r.squared)
+```
