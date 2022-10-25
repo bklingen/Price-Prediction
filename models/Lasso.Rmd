@@ -1,0 +1,24 @@
+---
+title: "Lasso"
+author: "Thomas FitzGerald and Mei Maddox"
+date: '2022-10-13'
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+options(knitr.duplicate.label = 'allow')
+knitr::opts_chunk$set(echo = TRUE, warnings = FALSE, message = FALSE)
+knitr::opts_chunk$set(tidy.opts=list(width.cutoff=70))
+```
+
+```{r read.previous, echo=FALSE}
+source(knitr::purl("../KaggleHousePrices.Rmd", quiet = TRUE))
+```
+
+```{r libraries, include=FALSE}
+library(splines)
+```
+
+

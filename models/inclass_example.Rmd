@@ -1,6 +1,6 @@
 ---
 title: "Inclass Example"
-author: "Mei Maddox"
+author: "Bernard Klingenberg"
 date: '2022-10-13'
 output:
   pdf_document: default
