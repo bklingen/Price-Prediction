@@ -24,6 +24,7 @@ dim(train)
 path_testdata <- 'https://raw.githubusercontent.com/bklingen/Price-Prediction/main/test.csv'
 test <- read_csv(path_testdata)
 dim(test)
+SalePrice <- train$SalePrice
 ```
 
 This makes sense: We have one less column in test data because of the missing house prices.
@@ -726,7 +727,7 @@ Preparing the dataset with the predicted sale prices for the test data:
 ```{r}
 predicted.SalePrice = exp(predict(fit1, newdata=data.frame(GrLivArea = test$GrLivArea)))
 SubmitDF = data.frame(Id=test$Id, SalePrice=predicted.SalePrice)
-write.csv(file='C:\\Teaching\\NewCollege\\StatsTopics\\Submission1.csv', SubmitDF, row.names = FALSE)
+# write.csv(file='C:\\Teaching\\NewCollege\\StatsTopics\\Submission1.csv', SubmitDF, row.names = FALSE)
 ```
 
 Submitting this file to the Kaggle competition, I obtained a "Prediction error", measures as 
@@ -974,7 +975,7 @@ predicted.SalePrice2 = exp(predict(fit2, newdata=test))
 Preparing the dataset with the predicted sale prices for the test data:
 ```{r}
 SubmitDF = data.frame(Id=test$Id, SalePrice=predicted.SalePrice2)
-write.csv(file='C:\\Teaching\\NewCollege\\StatsTopics\\Submission2.csv', SubmitDF, row.names = FALSE)
+# write.csv(file='C:\\Teaching\\NewCollege\\StatsTopics\\Submission2.csv', SubmitDF, row.names = FALSE)
 ```
 
 Interestingly, using all these variables, the prediction score did not go down by much. It is now 0.26450. What is the relationship between our predictions based on the two models:
@@ -989,9 +990,127 @@ For the house with ID 2600 in the test data, we predicted a sales price of over 
 To find out, I'm replacing just the prediction for the 5 most expensive predicted prices with the maximum sales price found in the training data.
 ```{r}
 SubmitDF$SalePrice[SubmitDF$Id %in% c(2600, 2504, 2421, 2550, 2711)] = max(SalePrice)
-write.csv(file='C:\\Teaching\\NewCollege\\StatsTopics\\Submission3.csv', SubmitDF, row.names = FALSE)
+# write.csv(file='C:\\Teaching\\NewCollege\\StatsTopics\\Submission3.csv', SubmitDF, row.names = FALSE)
 ```
 Yes, the prediction error went down to 0.19609!
 
 
+## Where our work begins 
 
+```{r}
+library(stats)
+```
+
+```{r}
+step(fit2)
+```
+
+```{r}
+fit3 <- lm(formula = log(SalePrice) ~ MSSubClass + MSZoning + LotArea + LotConfig + Neighborhood + Condition1 + Condition2 + BldgType + HouseStyle + OverallQual + OverallCond + YearBuilt + YearRemodAdd + Exterior1st + ExterCond + Foundation + BsmtQual + BsmtExposure + BsmtFinType1 + BsmtFinSF1 + BsmtFinSF2 + BsmtUnfSF + Heating + HeatingQC + CentralAir + `1stFlrSF` + `2ndFlrSF` + LowQualFinSF + BsmtFullBath + FullBath + HalfBath + KitchenAbvGr + KitchenQual + TotRmsAbvGrd + Functional + Fireplaces + GarageCars + GarageArea + GarageQual + GarageCond + WoodDeckSF + EnclosedPorch + `3SsnPorch` + ScreenPorch + PoolArea + PoolQC + MiscFeature + SaleType + SaleCondition, data = train)
+```
+
+```{r}
+predicted.SalePrice3 = exp(predict(fit3, newdata=test))
+SubmitDF = data.frame(Id=test$Id, SalePrice=predicted.SalePrice3)
+write.csv(file='C:/Users/rodri/Desktop/Submission3.csv', SubmitDF, row.names = FALSE)
+```
+
+Score: 0.26621 before adjusting of outliers
+
+```{r}
+plot(predicted.SalePrice3 ~ predicted.SalePrice)
+```
+```{r}
+SubmitDF$SalePrice[SubmitDF$Id %in% c(2600, 2504, 2421, 2550, 2711)] = max(SalePrice)
+```
+
+```{r}
+write.csv(file='C:/Users/rodri/Desktop/Submission3.csv', SubmitDF, row.names = FALSE)
+```
+Score: 0.19617 after adjusting of outliers.
+
+Next going to try and choose my own predictors.
+
+```{r}
+fit4 =  lm(formula = log(SalePrice) ~ SaleType+SaleCondition+FullBath+BedroomAbvGr+GrLivArea, data = train)
+```
+
+```{r}
+predicted.SalePrice4 = exp(predict(fit4, newdata=test))
+SubmitDF = data.frame(Id=test$Id, SalePrice=predicted.SalePrice4)
+write.csv(file='C:/Users/rodri/Desktop/Submission4.csv', SubmitDF, row.names = FALSE)
+```
+
+```{r}
+plot(predicted.SalePrice4 ~ predicted.SalePrice)
+```
+This should be worse than our previous model.  
+0.26267 which it is. 
+
+## Lets Try Splines
+```{r}
+library(earth) 
+fit5 <- earth(log(SalePrice)~.,data=train)
+```
+
+
+```{r}
+predicted.SalePrice5 = exp(predict(fit5, newdata=test))
+SubmitDF = data.frame(Id=test$Id, SalePrice=predicted.SalePrice5)
+names(SubmitDF)[2]<-"SalePrice"
+write.csv(file='C:/Users/rodri/Desktop/Submission5.csv', SubmitDF, row.names = FALSE)
+```
+
+```{r}
+plot(predicted.SalePrice5 ~ predicted.SalePrice)
+```
+
+0.13238!!! This is even without model selection.
+
+Lets try with model tuning 
+```{r}
+library(caret)
+```
+
+```{r}
+hyper_grid <- expand.grid(
+  degree = 1:3, 
+  nprune = seq(2, 100, length.out = 10) %>% floor()
+  )
+fit6 <- train(
+  x = train,
+  y = SalePrice,
+  method = "earth",
+  metric = "RMSE",
+  trControl = trainControl(method = "cv", number = 10),
+  tuneGrid = hyper_grid
+)
+```
+```{r}
+fit6$bestTune
+```
+
+```{r}
+library(vip)
+library(pdp)
+p1 <- vip(fit6, num_features = 40, bar = FALSE, value = "gcv") + ggtitle("GCV")
+p2 <- vip(fit6, num_features = 40, bar = FALSE, value = "rss") + ggtitle("RSS")
+gridExtra::grid.arrange(p1, p2, ncol = 2)
+```
+
+```{r}
+fit6 <- earth(log(SalePrice)~OverallQual+GrLivArea+YearBuilt+BsmtFinSF1+OverallCond+`2ndFlrSF`+LotArea+Condition2+TotalBsmtSF+BedroomAbvGr+GarageCars,data=train)
+```
+
+```{r}
+predicted.SalePrice6 = exp(predict(fit6, newdata=test))
+SubmitDF = data.frame(Id=test$Id, SalePrice=predicted.SalePrice6)
+names(SubmitDF)[2]<-"SalePrice"
+write.csv(file='C:/Users/rodri/Desktop/Submission6.csv', SubmitDF, row.names = FALSE)
+```
+
+```{r}
+plot(predicted.SalePrice6 ~ predicted.SalePrice)
+```
+
+0.13586 worse than before. I think this is pretty good.
