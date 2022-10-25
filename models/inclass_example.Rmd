@@ -73,20 +73,6 @@ train %>%
 dim(train)
 ```
 
-
-## Removing/Replacing Missing Values 
-It is best to get the training dataset that has no missing values (since they will be discarded in the fitting process of the full model anyway), and then check if any other predictors are constant. Which variables still have a lot of missing values:
-```{r}
-train %>%
-  summarize(across(everything(), ~sum(is.na(.x)))) %>%
-  sort(decreasing = TRUE)
-```
-For now, I'm going to drop `LotFrontage` from consideration, although we could impute values. I'm also going to drop `GarageYrBlt` from consideration, because it has around 80 missing values for those garages where there is no information. Since we have info on the garage from other variables, I rather keep 81 observations in the dataset, but not include `GarageYrBlt`. So, I'm going to drop `GarageYrBlt` from the list of predictors:
-```{r}
-train = train %>% select(-LotFrontage, -GarageYrBlt)
-test = test %>% select(-LotFrontage, -GarageYrBlt)
-```
-
 ## Fitting the model with almost all variables
 
 We can now fit the full model:
