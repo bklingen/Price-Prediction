@@ -9,13 +9,18 @@ knitr::opts_chunk$set(echo = TRUE, warnings = FALSE, message = FALSE)
 knitr::opts_chunk$set(tidy.opts=list(width.cutoff=70))
 ```
 
+```{r libraries, include=FALSE}
+library(dplyr)
+library(tidyverse)
+```
+
+
 ## Kaggle Competition
 [This Kaggle competition](https://www.kaggle.com/c/house-prices-advanced-regression-techniques/overview) is about predicting house prices based on a set of around 80 predictor variables. Please read the brief description of the project and get familiar with the various predictors. We will have to do some initial cleaning to successfully work with these data. Overall, we (in teams) will use the provided training dataset to built a multiple linear regression model for predicting house prices. Once we have settled on a final model, we will use it with the predictors available in the testing dataset to predict house prices. The goal of the competition mentions that our predictions $\hat{y}_i$ for the houses in the testing data are compared to the (withheld) true selling prices $y_i^\text{test}$ via $\sum_i(\log \hat{y}_i - \log y_i^\text{test})^2$. Because selling prices are typically right-skewed, I think as a first step we will log-transform the selling prices of the houses in the training data to obtain a more bell-shaped distribution. However, although we will built a model for the log-prices, we will still have to submit the price of a house (and not the log-price) to Kaggle, together with the ID of the house.
 
 ## Loading and inspecting the train and test datasets
 
 ```{r}
-library(tidyverse)
 ## Load Training Data
 path_traindata <- 'https://raw.githubusercontent.com/bklingen/Price-Prediction/main/train.csv'
 train <- read_csv(path_traindata)
@@ -689,56 +694,6 @@ test$LotConfig <- fct_collapse(test$LotConfig, Other = c("Corner","CulDSac", "FR
 test$LandContour <- fct_collapse(test$LandContour, NonLvl = c("Bnk", "HLS", "Low"))
 ```
 
-## First Try for building a predictive model, using just one variable, but as a smooth function:
-```{r}
-library(splines)
-plot(train$SalePrice ~ train$GrLivArea)
-plot(log(train$SalePrice) ~ train$GrLivArea)
-```
-Better to log-transform response
-```{r}
-fit1 = lm(log(SalePrice) ~ ns(GrLivArea, df=10), data=train)
-seqGrLivArea = seq(min(train$GrLivArea), max(train$GrLivArea), length.out=200)
-predictedSpline = predict(fit1, newdata = data.frame(GrLivArea=seqGrLivArea))
-ggplot(data=train, 
-       aes(x=GrLivArea, 
-           y=log(SalePrice)
-       )
-  ) +
-  geom_point(pch=21, fill="red", size=1.2, alpha=0.5) +
-  geom_line(
-    data = data.frame(
-      x = seqGrLivArea,
-      y = predictedSpline
-    ),
-    aes(
-      x=x,
-      y=y
-    ),
-    color = "blue", size = 1
-  )
-```
-Preparing the dataset with the predicted sale prices for the test data:
-```{r}
-predicted.SalePrice = exp(predict(fit1, newdata=data.frame(GrLivArea = test$GrLivArea)))
-SubmitDF = data.frame(Id=test$Id, SalePrice=predicted.SalePrice)
-write.csv(file='C:\\Teaching\\NewCollege\\StatsTopics\\Submission1.csv', SubmitDF, row.names = FALSE)
-```
-
-Submitting this file to the Kaggle competition, I obtained a "Prediction error", measures as 
-$$
-\sum (\log(\hat{y}_i) - \log(y_i))^2
-$$
-of 0.28857, where $\hat{y}_i$ is my prediction of the sale price of the $i$th house in the test data, and $y_i$ is the actual sale price only known to Kaggle.
-
-## Second Try, including all predictors!
-If we include all predictors, one issue is that a few predictors might have a lot of NA values, and then the corresponding observation is not used in the fit. (You find this out when you try to fit the full model.) Let's see which variables have the most NA's.
-```{r}
-train %>%
-  summarize(across(everything(), ~sum(is.na(.x)))) %>%
-  sort(decreasing=TRUE)
-dim(train)
-```
 For the variable `MiscFeature`, almost all values are missing. However, looking in the data description file, this actually means that the house simply doesn't have any other features. So, we set the NA's to "none", in both the train and test datasets. The same applies to `Alley`, where an NA means "none":
 ```{r}
 train$MiscFeature = fct_explicit_na(train$MiscFeature, na_level="none")
@@ -783,19 +738,7 @@ train[train$Utilities == 'NoSeWa',]
 ```
 There we go, `LotFrontage` is `NA` for this particular house, so it is removed, and the remaining houses all have the same utility type.
 
-
-## Removing/Replacing Missing Values 
-It is best to get the training dataset that has no missing values (since they will be discarded in the fitting process of the full model anyway), and then check if any other predictors are constant. Which variables still have a lot of missing values:
-```{r}
-train %>%
-  summarize(across(everything(), ~sum(is.na(.x)))) %>%
-  sort(decreasing = TRUE)
-```
-For now, I'm going to drop `LotFrontage` from consideration, although we could impute values. I'm also going to drop `GarageYrBlt` from consideration, because it has around 80 missing values for those garages where there is no information. Since we have info on the garage from other variables, I rather keep 81 observations in the dataset, but not include `GarageYrBlt`. So, I'm going to drop `GarageYrBlt` from the list of predictors:
-```{r}
-train = train %>% select(-LotFrontage, -GarageYrBlt)
-test = test %>% select(-LotFrontage, -GarageYrBlt)
-```
+## Removing/Replacing Missing Values
 
 We now need to handle the Basement values. We need to replace the NA's with "none":
 ```{r}
@@ -951,40 +894,3 @@ summary(train$SaleType)
 summary(test$SaleType)
 test$SaleType[is.na(test$SaleType)] = "Other"
 ```
-
-
-## Fitting the model with almost all variables
-
-We can now fit the full model:
-```{r}
-SalePrice = train$SalePrice
-HouseId = train$Id #just in case we need it
-train = train %>% select(-Id, -SalePrice)
-fit2 = lm(log(SalePrice) ~ . , data=train)
-```
-
-We can now try to predict the sales price based on the variables in the test data, since we have addressed all missing values in th test data:
-```{r error = TRUE}
-predicted.SalePrice2 = exp(predict(fit2, newdata=test))
-```
-Preparing the dataset with the predicted sale prices for the test data:
-```{r}
-SubmitDF = data.frame(Id=test$Id, SalePrice=predicted.SalePrice2)
-write.csv(file='C:\\Teaching\\NewCollege\\StatsTopics\\Submission2.csv', SubmitDF, row.names = FALSE)
-```
-
-Interestingly, using all these variables, the prediction score did not go down by much. It is now 0.26450. What is the relationship between our predictions based on the two models:
-```{r}
-plot(predicted.SalePrice2 ~ predicted.SalePrice)
-```
-This is pretty telling. Just for a few houses (three), we predicted a much higher price with the second model compared to the first. Which houses are these:
-```{r}
-SubmitDF %>% slice_max(SalePrice,n=8)
-```
-For the house with ID 2600 in the test data, we predicted a sales price of over 22 million! The error alone in this prediction could be huge!
-To find out, I'm replacing just the prediction for the 5 most expensive predicted prices with the maximum sales price found in the training data.
-```{r}
-SubmitDF$SalePrice[SubmitDF$Id %in% c(2600, 2504, 2421, 2550, 2711)] = max(SalePrice)
-write.csv(file='C:\\Teaching\\NewCollege\\StatsTopics\\Submission3.csv', SubmitDF, row.names = FALSE)
-```
-Yes, the prediction error went down to 0.19609!
