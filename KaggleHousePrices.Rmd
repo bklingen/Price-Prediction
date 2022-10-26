@@ -993,5 +993,38 @@ write.csv(file='C:\\Teaching\\NewCollege\\StatsTopics\\Submission3.csv', SubmitD
 ```
 Yes, the prediction error went down to 0.19609!
 
+## 
+```{r}
+library(splines)
+fit.lm <- lm(log(SalePrice) ~ ., data = train)
+#summary(fit.lm)
+```
 
+
+
+```{r}
+cooks.distance(fit.lm)
+plot(fit.lm, which=4)
+```
+
+```{r}
+train_wout_outliers = train[-c(1171, 1299, 1424), ]
+saleprice_wout_outliers = SalePrice[-c(1171, 1299, 1424)]
+fit.lm <- lm(log(saleprice_wout_outliers) ~ ., data = train_wout_outliers)
+#summary(fit.lm)
+```
+
+library(MASS)
+```{r}
+library(MASS)
+fit.lm.step <- step(fit.lm)
+```
+```{r}
+predictions = exp(predict(fit.lm.step, newdata=test))
+```
+
+```{r}
+submitDF = data.frame(Id = test$Id, SalePrice = predictions)
+write.csv(file = './Submission_paul_mileva_1.csv', submitDF, row.names=FALSE)
+```
 
