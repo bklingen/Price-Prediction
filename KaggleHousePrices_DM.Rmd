@@ -1,0 +1,501 @@
+---
+title: "Predicting House Prices"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(tidy.opts=list(width.cutoff=70))
+```
+
+
+## Loading and inspecting the train and test datasets
+
+```{r}
+library(tidyverse)
+## Load Training Data
+path_traindata <- 'D:\\Datos\\Documents\\Development\\R\\Advanced Statistics\\Project 1 House Prediction\\GIT\\train.csv'
+train <- read_csv(path_traindata)
+#dim(train)
+## Load Testing Data
+path_testdata <- 'D:\\Datos\\Documents\\Development\\R\\Advanced Statistics\\Project 1 House Prediction\\GIT\\test.csv'
+test <- read_csv(path_testdata)
+#dim(test)
+```
+
+```{r}
+#Remove id
+train = train %>% select(-Id)
+```
+
+```{r}
+#Rename columns
+train <- train %>% 
+          rename(
+            FirstFlrSF = '1stFlrSF',
+            SectFlrSF = '2ndFlrSF',
+            ThirdSsnPorch= '3SsnPorch'
+            )
+
+test <- test %>% 
+          rename(
+            FirstFlrSF = '1stFlrSF',
+            SectFlrSF = '2ndFlrSF',
+            ThirdSsnPorch= '3SsnPorch'
+            )
+```
+
+## Explore PoolQC
+PoolQC has different levels in train and test. Let's investigate it
+```{r}
+counts <- table(train$PoolQC)
+barplot(counts)
+counts
+```
+```{r}
+counts <- table(test$PoolQC)
+barplot(counts)
+counts
+```
+
+Since there are not a lot of samples, we will just collapse PoolQC into Yes or None. 
+Also, we will remove predictor PoolArea from the final model because we will see below that the rship with SalePrice doesnt look linear at all
+
+```{r}
+#Collapse PoolQC into yes or none
+train$PoolQC = fct_collapse(train$PoolQC, yes=c("Ex", "Fa"))
+test$PoolQC = fct_collapse(test$PoolQC, yes=c("Ex", "Gd"))
+```
+
+## Numerical Variables
+```{r}
+#library(purrr)
+train_num <- train %>% keep(is.numeric) %>% head()
+num_cols <- unlist(lapply(train, is.numeric))         # Identify numeric columns
+train_num <- train[ , num_cols]                        # Subset numeric columns of data
+train_num
+```
+
+
+###Check linearity btw response and numerical predictors
+
+```{r}
+scatter_fun = function(x, y) {
+     ggplot(train_num, aes_string(x = x, y = y ) ) +
+          geom_point() +
+          geom_smooth(method = "loess", se = FALSE, color = "grey74") +
+          theme_bw() 
+}
+```
+
+```{r}
+library(purrr) 
+response = "SalePrice" 
+expl = names(train_num)[1:ncol(train_num)-1]
+#expl = names(train)[1:5]
+
+elev_plots = map(expl, ~scatter_fun(.x, "SalePrice") )
+```
+
+```{r}
+elev_plots
+```
+
+
+### Boxplots
+
+```{r}
+for(i in colnames(train_num)) {       # for-loop over columns
+  print(i) 
+  boxplot(train_num[i], data=train_num, main=i)
+}
+```
+
+## Multiple linear regression - All predictors
+
+```{r}
+#Multiple linear regression
+mlr_obj <- lm(log(SalePrice) ~ .-PoolArea,
+             data = train)
+#summary(mlr_obj)
+```
+
+### Residuals
+```{r}
+res <- resid(mlr_obj)
+
+#produce residual vs. fitted plot
+plot(fitted(mlr_obj), res)
+
+#add a horizontal line at 0 
+abline(0,0)
+```
+
+```{r}
+#create Q-Q plot for residuals
+qqnorm(res)
+
+#add a straight diagonal line to the plot
+qqline(res) 
+```
+
+
+
+
+```{r}
+#Create density plot of residuals
+plot(density(res))
+```
+
+### Check Outliers
+
+```{r}
+plot(mlr_obj, which=3)
+```
+#Influenia Observations: Cook's Distance
+
+```{r}
+#Influential Outliers
+plot(mlr_obj, which=4)
+```
+
+```{r}
+#Removing influential observations
+train <- train[-c(1171, 1299, 1424, 524), ] #Including PoolArea
+#train <- train[-c(463, 632, 1322, 89, 588, 705), ] #Without PoolArea
+```
+
+## Linear Reggression - without outliers
+
+```{r}
+mlr_obj2 <- lm(log(SalePrice) ~ .-PoolArea,
+             data = train)
+```
+
+
+### Residuals
+```{r}
+res2 <- resid(mlr_obj2)
+
+#produce residual vs. fitted plot
+plot(fitted(mlr_obj2), res2)
+
+#add a horizontal line at 0 
+abline(0,0)
+```
+
+```{r}
+#create Q-Q plot for residuals
+qqnorm(res2)
+
+#add a straight diagonal line to the plot
+qqline(res2)
+```
+
+
+
+### Collinearity
+
+```{r}
+num_cols <- unlist(lapply(train, is.numeric))         # Identify numeric columns
+train_num <- train[ , num_cols]                        # Subset numeric columns of data
+```
+
+#### Correlation Matrix
+
+```{r}
+library(corrplot)
+cor.m <- cor(train_num)
+corrplot(cor.m, type="lower")
+```
+
+
+We can see many pairs of features that are highly correlated. Let's see the correlations above 0.7
+```{r}
+#Print the pairs of variables that are highly correlated. 
+corr_check <- function(Dataset, threshold){
+  matriz_cor <- cor(Dataset)
+  matriz_cor
+
+  for (i in 1:nrow(matriz_cor)){
+    correlations <-  which((abs(matriz_cor[i,i:ncol(matriz_cor)]) > threshold) & (matriz_cor[i,i:ncol(matriz_cor)] != 1))
+  
+    if(length(correlations)> 0){
+      lapply(correlations,FUN =  function(x) (cat(paste(colnames(Dataset)[i], "with",colnames(Dataset)[x]), "\n")))
+     
+    }
+  }
+}
+
+corr_check(train_num, 0.8)
+```
+
+#### VIF
+
+Let's use VIF to check for collinearity
+
+```{r}
+library(car)
+#vif(mlr_obj2) 
+```
+TotalBsmtSF and GrLivArea are removed from the model because we were getting the error "there are aliased coefficients in the model" which I think it is because they are a perfect function of other vars (perfect collinearity)
+
+```{r}
+mlr_obj3 <- lm(log(SalePrice) ~ .-PoolArea -TotalBsmtSF -GrLivArea,
+             data = train_num)
+```
+
+```{r}
+vif(mlr_obj3) 
+```
+
+
+Let's Remove the Variable with the biggest VIF and keep doing this until they are all below 5
+```{r}
+mlr_obj3 <- lm(log(SalePrice) ~ . -PoolArea -TotalBsmtSF -GrLivArea -FirstFlrSF,
+             data = train_num)
+vif(mlr_obj3) 
+```
+We still have values above 5. Let's remove GarageCars
+
+```{r}
+mlr_obj3 <- lm(log(SalePrice) ~ . -PoolArea -TotalBsmtSF -GrLivArea -FirstFlrSF -GarageCars,
+             data = train_num)
+vif(mlr_obj3) 
+```
+All our values are below 5. We stop here. So we will remove TotalBsmtSF, GrLivArea, `FirstFlrSF and GarageCars  from our final model 
+
+### More Influential Outliers
+```{r}
+#Influential Outliers
+plot(mlr_obj3, which=4)
+```
+```{r}
+#train <- train[-c(313, 346, 494), ]
+train <- train[-c(347, 524, 1299), ]
+```
+
+
+## Final Model (before AIC)
+```{r}
+#Fit with all predictors, including categorical
+mlr_obj <- lm(log(SalePrice) ~ . -PoolArea -TotalBsmtSF -GrLivArea -FirstFlrSF -GarageCars,
+             data = train)
+```
+
+
+## Variable Selection: AIC
+```{r}
+step(mlr_obj)
+```
+
+
+
+## Final Model (after AIC) 
+
+```{r}
+fit_aic = lm(log(SalePrice) ~ MSSubClass + MSZoning + LotArea + 
+    Street + LotConfig + LandSlope + Neighborhood + Condition1 + 
+    BldgType + HouseStyle + OverallQual + OverallCond + YearBuilt + 
+    YearRemodAdd + Exterior1st + MasVnrType + ExterCond + Foundation + 
+    BsmtQual + BsmtExposure + BsmtFinSF1 + BsmtFinType2 + BsmtFinSF2 + 
+    BsmtUnfSF + Heating + HeatingQC + CentralAir + SectFlrSF + 
+    LowQualFinSF + BsmtFullBath + FullBath + HalfBath + KitchenAbvGr + 
+    KitchenQual + TotRmsAbvGrd + Functional + Fireplaces + GarageArea + 
+    GarageQual + GarageCond + WoodDeckSF + OpenPorchSF + EnclosedPorch + 
+    ThirdSsnPorch + ScreenPorch + PoolQC + MiscVal + YrSold + 
+    SaleType + SaleCondition,
+    data = train)
+```
+
+
+## Make Predictions
+Make predictions for the test data
+```{r error = TRUE}
+predicted.SalePrice2 = exp(predict(fit_aic, newdata=test))
+```
+Preparing the dataset with the predicted sale prices for the test data:
+```{r}
+SubmitDF = data.frame(Id=test$Id, SalePrice=predicted.SalePrice2)
+write.csv(file='D:\\Datos\\Documents\\Development\\R\\Advanced Statistics\\Project 1 House Prediction\\GIT\\\\Submission_aic3.csv', SubmitDF, row.names = FALSE)
+```
+
+## Results
+4 - Score: 0.13675 -> Witout PoolArea 
+
+
+
+# 2nd Approach: Add Predictors Transformations
+
+## Check whether some Quadratic Terms are Significant
+
+### YearBuilt
+
+```{r}
+#Linear Fit
+linear.model = lm(SalePrice ~ YearBuilt, data = train)
+summary(linear.model)
+plot(train$YearBuilt, train$SalePrice)
+abline(linear.model, col = "blue")
+```
+```{r}
+#Quadratic fit
+YearBuilt2 <- train$YearBuilt^2
+quadratic.model <-lm(data=train, SalePrice ~ YearBuilt + YearBuilt2)
+summary(quadratic.model)
+
+yearvalues <- seq(1880, 2022, 2)
+
+predictedPrices <- predict(quadratic.model,list(YearBuilt=yearvalues, YearBuilt2=yearvalues^2))
+
+plot(train$YearBuilt, train$SalePrice)
+abline(quadratic.model, col = "darkgreen")
+lines(yearvalues, predictedPrices, col = "darkgreen", lwd = 3)
+
+```
+
+It looks like a quadratic function follows the trend better and the quadratic term is significant so we will add it in the final model.
+Let's add this new feature to our datasets
+
+```{r}
+train <- train %>% mutate(YearBuilt2 = YearBuilt^2)
+test <- test %>% mutate(YearBuilt2 = YearBuilt^2)
+```
+
+
+```{r}
+fit_aic = lm(log(SalePrice) ~ MSSubClass + MSZoning + LotArea + 
+    Street + LotConfig + LandSlope + Neighborhood + Condition1 + 
+    BldgType + HouseStyle + OverallQual + OverallCond + YearBuilt + YearBuilt2 + #Adding quadratic term YearBuilt2
+    YearRemodAdd + Exterior1st + MasVnrType + ExterCond + Foundation + 
+    BsmtQual + BsmtExposure + BsmtFinSF1 + BsmtFinType2 + BsmtFinSF2 + 
+    BsmtUnfSF + Heating + HeatingQC + CentralAir + SectFlrSF + 
+    LowQualFinSF + BsmtFullBath + FullBath + HalfBath + KitchenAbvGr + 
+    KitchenQual + TotRmsAbvGrd + Functional + Fireplaces + GarageArea + 
+    GarageQual + GarageCond + WoodDeckSF + OpenPorchSF + EnclosedPorch + 
+    ThirdSsnPorch + ScreenPorch + PoolQC + MiscVal + YrSold + 
+    SaleType + SaleCondition,
+    data = train)
+
+predicted.SalePrice2 = exp(predict(fit_aic, newdata=test))
+
+SubmitDF = data.frame(Id=test$Id, SalePrice=predicted.SalePrice2)
+write.csv(file='D:\\Datos\\Documents\\Development\\R\\Advanced Statistics\\Project 1 House Prediction\\GIT\\\\Submission_aic4.csv', SubmitDF, row.names = FALSE)
+```
+
+Score: 0.13643 (Previous was 0.13675) IMPROVED!
+
+
+
+### GarageArea
+
+```{r}
+#Linear Fit
+linear.model = lm(SalePrice ~ GarageArea, data = train)
+summary(linear.model)
+plot(train$GarageArea, train$SalePrice)
+abline(linear.model, col = "blue")
+```
+
+```{r}
+#Quadratic fit
+GarageArea2 <- train$GarageArea^2
+quadratic.model <-lm(data=train, SalePrice ~ GarageArea + GarageArea2)
+summary(quadratic.model)
+
+garagevalues <- seq(0, 1400, 100)
+
+predictedPrices <- predict(quadratic.model,list(GarageArea=garagevalues, GarageArea2=garagevalues^2))
+
+plot(train$GarageArea, train$SalePrice)
+abline(quadratic.model, col = "darkgreen")
+lines(garagevalues, predictedPrices, col = "darkgreen", lwd = 3)
+
+```
+It looks like a quadratic function follows the trend better and the quadratic term is significant so we will add it in the final model.
+Let's add this new feature to our datasets
+
+```{r}
+train <- train %>% mutate(GarageArea2 = GarageArea^2)
+test <- test %>% mutate(GarageArea2 = GarageArea^2)
+```
+
+
+```{r}
+fit_aic = lm(log(SalePrice) ~ MSSubClass + MSZoning + LotArea + 
+    Street + LotConfig + LandSlope + Neighborhood + Condition1 + 
+    BldgType + HouseStyle + OverallQual + OverallCond + YearBuilt + YearBuilt2 + #Adding quadratic term YearBuilt2
+    YearRemodAdd + Exterior1st + MasVnrType + ExterCond + Foundation + 
+    BsmtQual + BsmtExposure + BsmtFinSF1 + BsmtFinType2 + BsmtFinSF2 + 
+    BsmtUnfSF + Heating + HeatingQC + CentralAir + SectFlrSF + 
+    LowQualFinSF + BsmtFullBath + FullBath + HalfBath + KitchenAbvGr + 
+    KitchenQual + TotRmsAbvGrd + Functional + Fireplaces + GarageArea + GarageArea2 +  #Adding quadratic term GarageArea2
+    GarageQual + GarageCond + WoodDeckSF + OpenPorchSF + EnclosedPorch + 
+    ThirdSsnPorch + ScreenPorch + PoolQC + MiscVal + YrSold + 
+    SaleType + SaleCondition,
+    data = train)
+
+predicted.SalePrice2 = exp(predict(fit_aic, newdata=test))
+
+SubmitDF = data.frame(Id=test$Id, SalePrice=predicted.SalePrice2)
+write.csv(file='D:\\Datos\\Documents\\Development\\R\\Advanced Statistics\\Project 1 House Prediction\\GIT\\\\Submission_aic5.csv', SubmitDF, row.names = FALSE)
+```
+Score: 0.13638 (Previous was 0.13643) IMPROVED! -- BEST BY NOW
+
+### SectFlrSF
+
+```{r}
+#Linear Fit
+linear.model = lm(SalePrice ~ SectFlrSF, data = train)
+summary(linear.model)
+plot(train$SectFlrSF, train$SalePrice)
+abline(linear.model, col = "blue")
+```
+
+```{r}
+#Quadratic fit
+SectFlrSF2 <- train$SectFlrSF^2
+quadratic.model <-lm(data=train, SalePrice ~ SectFlrSF + SectFlrSF2)
+summary(quadratic.model)
+
+values <- seq(0, 2000, 100)
+
+predictedPrices <- predict(quadratic.model,list(SectFlrSF=values, SectFlrSF2=values^2))
+
+plot(train$SectFlrSF, train$SalePrice)
+abline(quadratic.model, col = "darkgreen")
+lines(values, predictedPrices, col = "darkgreen", lwd = 3)
+
+```
+It looks like a quadratic function follows the trend better and the quadratic term is significant so we will add it in the final model.
+Let's add this new feature to our datasets
+
+```{r}
+train <- train %>% mutate(SectFlrSF2 = SectFlrSF^2)
+test <- test %>% mutate(SectFlrSF2 = SectFlrSF^2)
+```
+
+
+```{r}
+fit_aic = lm(log(SalePrice) ~ MSSubClass + MSZoning + LotArea + 
+    Street + LotConfig + LandSlope + Neighborhood + Condition1 + 
+    BldgType + HouseStyle + OverallQual + OverallCond + YearBuilt + YearBuilt2 + #Adding quadratic term YearBuilt2
+    YearRemodAdd + Exterior1st + MasVnrType + ExterCond + Foundation + 
+    BsmtQual + BsmtExposure + BsmtFinSF1 + BsmtFinType2 + BsmtFinSF2 + 
+    BsmtUnfSF + Heating + HeatingQC + CentralAir + SectFlrSF + SectFlrSF2 + #Adding quadratic term SectFlrSF2
+    LowQualFinSF + BsmtFullBath + FullBath + HalfBath + KitchenAbvGr + 
+    KitchenQual + TotRmsAbvGrd + Functional + Fireplaces + GarageArea + GarageArea2 +  #Adding quadratic term GarageArea2
+    GarageQual + GarageCond + WoodDeckSF + OpenPorchSF + EnclosedPorch + 
+    ThirdSsnPorch + ScreenPorch + PoolQC + MiscVal + YrSold + 
+    SaleType + SaleCondition,
+    data = train)
+
+predicted.SalePrice2 = exp(predict(fit_aic, newdata=test))
+
+SubmitDF = data.frame(Id=test$Id, SalePrice=predicted.SalePrice2)
+write.csv(file='D:\\Datos\\Documents\\Development\\R\\Advanced Statistics\\Project 1 House Prediction\\GIT\\\\Submission_aic6.csv', SubmitDF, row.names = FALSE)
+```
+
+Score: 0.13661 (Previous was 0.13638) WORSE!
+
