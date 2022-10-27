@@ -998,7 +998,7 @@ We will begin by fitting the model with all the predictors. We also log transfor
 
 ```{r}
 fit.lm <- lm(log(SalePrice) ~ ., data = train)
-summary(fit.lm)
+#summary(fit.lm)
 ```
 
 This baseline linear regression model yields a score of 0.26450.
@@ -1012,25 +1012,34 @@ write.csv(file = './Submission_paul_mileva_baseline.csv', submitDF, row.names=FA
 To identify influential observations, we use cook's distance. 3 observations (1171, 1299, and 1424) have 
 a cook's distance significantly greater than 1. Thus, we will remove these observations.
 
-```{r}
+```{r results='hide'}
 cooks.distance(fit.lm)
+```
+
+```{r}
 plot(fit.lm, which=4)
 ```
+
 
 ```{r}
 # Remove the influential observations from the training set
 train_wout_outliers = train[-c(1171, 1299, 1424), ]
 saleprice_wout_outliers = SalePrice[-c(1171, 1299, 1424)]
 fit.lm <- lm(log(saleprice_wout_outliers) ~ ., data = train_wout_outliers)
-summary(fit.lm)
+#summary(fit.lm)
 ```
 
 We experiment with using AIC to select the best set of predictors for the model. 
 
-```{r}
+```{r results='hide'}
 library(MASS)
 fit.lm.step <- step(fit.lm)
 ```
+```{r}
+summary(fit.lm.step)
+```
+
+
 ```{r}
 # Save predictions
 predictions = exp(predict(fit.lm.step, newdata=test))
