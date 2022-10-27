@@ -101,17 +101,10 @@ fAIC.2.prediction[,1][fAIC.2.prediction[,1]<=low.q]<-low.q
 fAIC.2.prediction[,1][fAIC.2.prediction[,1]>=high.q]<-high.q
 bAIC.2.prediction[,1][bAIC.2.prediction[,1]<=low.q]<-low.q
 bAIC.2.prediction[,1][bAIC.2.prediction[,1]>=high.q]<-high.q
-
-quantile(train$SalePrice,na.rm=TRUE,probs=c(0,.05,.25,.50,.75,.95,1))
-quantile(bAIC.prediction,na.rm=TRUE,probs=c(0,.05,.25,.50,.75,.95,1))
-quantile(fAIC.prediction,na.rm=TRUE,probs=c(0,.05,.25,.50,.75,.95,1))
-quantile(bAIC.2.prediction,na.rm=TRUE,probs=c(0,.05,.25,.50,.75,.95,1))
-quantile(fAIC.2.prediction,na.rm=TRUE,probs=c(0,.05,.25,.50,.75,.95,1))
-
 ```
 
 ```{r}
 df.output<-as.data.frame(cbind(test$Id,bAIC.2.prediction[,1]))
 colnames(df.output)<-c('Id','SalePrice')
-df.output.to_csv('..\\bAIC.csv')
+write.csv(df.output,'..\\AIC_prediction.csv')
 ```
