@@ -993,14 +993,24 @@ write.csv(file='C:\\Teaching\\NewCollege\\StatsTopics\\Submission3.csv', SubmitD
 ```
 Yes, the prediction error went down to 0.19609!
 
-## 
+## Paul-Mileva Additions
+We will begin by fitting the model with all the predictors. We also log transform the response variable. 
+
 ```{r}
-library(splines)
 fit.lm <- lm(log(SalePrice) ~ ., data = train)
-#summary(fit.lm)
+summary(fit.lm)
 ```
 
+This baseline linear regression model yields a score of 0.26450.
+```{r}
+# Save the predictions in a file
+predictions = exp(predict(fit.lm, newdata=test))
+submitDF = data.frame(Id = test$Id, SalePrice = predictions)
+write.csv(file = './Submission_paul_mileva_baseline.csv', submitDF, row.names=FALSE)
+```
 
+To identify influential observations, we use cook's distance. 3 observations (1171, 1299, and 1424) have 
+a cook's distance significantly greater than 1. Thus, we will remove these observations.
 
 ```{r}
 cooks.distance(fit.lm)
@@ -1008,23 +1018,24 @@ plot(fit.lm, which=4)
 ```
 
 ```{r}
+# Remove the influential observations from the training set
 train_wout_outliers = train[-c(1171, 1299, 1424), ]
 saleprice_wout_outliers = SalePrice[-c(1171, 1299, 1424)]
 fit.lm <- lm(log(saleprice_wout_outliers) ~ ., data = train_wout_outliers)
-#summary(fit.lm)
+summary(fit.lm)
 ```
 
-library(MASS)
+We experiment with using AIC to select the best set of predictors for the model. 
+
 ```{r}
 library(MASS)
 fit.lm.step <- step(fit.lm)
 ```
 ```{r}
+# Save predictions
 predictions = exp(predict(fit.lm.step, newdata=test))
-```
-
-```{r}
 submitDF = data.frame(Id = test$Id, SalePrice = predictions)
 write.csv(file = './Submission_paul_mileva_1.csv', submitDF, row.names=FALSE)
 ```
+This final model has a score of 0.14246!
 
