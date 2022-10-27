@@ -127,7 +127,7 @@ text(x=1:length(cooks.distance)+1, y=cooks.distance, labels=ifelse(cooks.distanc
 
 
 ```{r}
-new.train <- train %>% filter(!(row_number() %in% c(524, 1171, 1299, 1424)))
+new.train <- train %>% filter(!(row_number() %in% c(524, 692, 1171, 1299, 1424)))
 fit.all <- new.train %>% select(-Id) %>%
   lm(log(SalePrice) ~ ., data=.)
 ```
@@ -170,4 +170,3 @@ SubmitDF <- data.frame(test$Id, predicted.lasso)
 colnames(SubmitDF) <- c("Id", "SalePrice")
 write.csv(file='../submissions/lasso2.csv', SubmitDF, row.names = FALSE)
 ```
-
