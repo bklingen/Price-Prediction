@@ -2,6 +2,8 @@
 title: "Predicting House Prices"
 output:
   pdf_document: default
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -45,7 +47,7 @@ OK, great. So no surprises there. All predictors that exist in the train data se
 
 Let's see how many quantitative and how many categorical predictors we have in the training dataset, at least at face value:
 ```{r}
-train_quantPredictors = train %>% select(where(is.numeric)) %>% select(-SalePrice) 
+train_quantPredictors = train %>% select(where(is.numeric)) %>% select(-SalePrice)
 train_catPredictors = train %>% select(where(is.character))
 dim(train_quantPredictors)
 dim(train_catPredictors)
@@ -528,66 +530,6 @@ garagequal.collapse <- function(x) factor(x,
 train <- train %>% mutate(GarageQual = as.factor(GarageQual), GarageQual = garagequal.collapse(GarageQual))
 test <- test %>% mutate(GarageQual = as.factor(GarageQual), GarageQual = garagequal.collapse(GarageQual))
 ```
-
-
-```{r eval=FALSE, include=FALSE}
-### GarageQual ###
-
-#Explore counts
-train_catPredictors %>% count(GarageQual, sort = TRUE)
-```
-
-```{r eval=FALSE, include=FALSE}
-#Handle NAs
-#According to the data description, NA means no garage. 
-#Change NA category to "none" to avoid issues.
-garageQual <- as.character(train_catPredictors$GarageQual)
-garageQual[is.na(garageQual)] <- "none"
-garageQual <- as.factor(garageQual)
-```
-
-```{r eval=FALSE, include=FALSE}
-#Collapse categories: 
-# - Let's collapse Ex	(Excellent) and Gd	(Good) into 1 category: Gd
-# - Let's collapse Fa	(Fair) and Po	(Poor) into 1 category: Po
-# - None and TA remains the same
-
-garageQual <- fct_collapse(garageQual, Gd = c("Ex","Gd"))
-garageQual <- fct_collapse(garageQual, Po = c("Fa","Po"))
-```
-
-
-```{r eval=FALSE, include=FALSE}
-#Update column with new values
-train$GarageQual <- garageQual
-```
-
-Need to do the same for test data:
-```{r eval=FALSE, include=FALSE}
-#Handle NAs
-#According to the data description, NA means no garage. 
-#Change NA category to "none" to avoid issues.
-garageQual <- as.character(test_catPredictors$GarageQual)
-garageQual[is.na(garageQual)] <- "none"
-garageQual <- as.factor(garageQual)
-```
-
-```{r eval=FALSE, include=FALSE}
-#Collapse categories: 
-# - Let's collapse Ex	(Excellent) and Gd	(Good) into 1 category: Gd
-# - Let's collapse Fa	(Fair) and Po	(Poor) into 1 category: Po
-# - None and TA remains the same
-
-garageQual <- fct_collapse(garageQual, Gd = c("Ex","Gd"))
-garageQual <- fct_collapse(garageQual, Po = c("Fa","Po"))
-```
-
-
-```{r eval=FALSE, include=FALSE}
-#Update column with new values
-test$GarageQual <- garageQual
-```
-
 
 ```{r}
 ### GarageCond ###
