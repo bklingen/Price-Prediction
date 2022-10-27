@@ -1,26 +1,14 @@
----
-title: "Predicting House Prices"
-output:
-  pdf_document: default
----
-
-```{r setup, include=FALSE}
+## ----setup, include=FALSE-----------------------------------------------------
 knitr::opts_chunk$set(echo = TRUE, warnings = FALSE, message = FALSE)
 knitr::opts_chunk$set(tidy.opts=list(width.cutoff=70))
-```
 
-```{r libraries, include=FALSE}
+
+## ----libraries, include=FALSE-------------------------------------------------
 library(dplyr)
 library(tidyverse)
-```
 
 
-## Kaggle Competition
-[This Kaggle competition](https://www.kaggle.com/c/house-prices-advanced-regression-techniques/overview) is about predicting house prices based on a set of around 80 predictor variables. Please read the brief description of the project and get familiar with the various predictors. We will have to do some initial cleaning to successfully work with these data. Overall, we (in teams) will use the provided training dataset to built a multiple linear regression model for predicting house prices. Once we have settled on a final model, we will use it with the predictors available in the testing dataset to predict house prices. The goal of the competition mentions that our predictions $\hat{y}_i$ for the houses in the testing data are compared to the (withheld) true selling prices $y_i^\text{test}$ via $\sum_i(\log \hat{y}_i - \log y_i^\text{test})^2$. Because selling prices are typically right-skewed, I think as a first step we will log-transform the selling prices of the houses in the training data to obtain a more bell-shaped distribution. However, although we will built a model for the log-prices, we will still have to submit the price of a house (and not the log-price) to Kaggle, together with the ID of the house.
-
-## Loading and inspecting the train and test datasets
-
-```{r}
+## -----------------------------------------------------------------------------
 ## Load Training Data
 path_traindata <- 'https://raw.githubusercontent.com/bklingen/Price-Prediction/main/train.csv'
 train <- read_csv(path_traindata)
@@ -29,64 +17,52 @@ dim(train)
 path_testdata <- 'https://raw.githubusercontent.com/bklingen/Price-Prediction/main/test.csv'
 test <- read_csv(path_testdata)
 dim(test)
-```
 
-This makes sense: We have one less column in test data because of the missing house prices.
 
-But, are the column names the same? Let's find the "difference" between two sets: All the column names that are in the test data but not in the train data: 
-```{r}
+## -----------------------------------------------------------------------------
 setdiff(colnames(test), colnames(train))
-```
-OK, good, and now the other way around:
-```{r}
-setdiff(colnames(train), colnames(test))
-```
-OK, great. So no surprises there. All predictors that exist in the train data set also appear in the test dataset.
 
-Let's see how many quantitative and how many categorical predictors we have in the training dataset, at least at face value:
-```{r}
+
+## -----------------------------------------------------------------------------
+setdiff(colnames(train), colnames(test))
+
+
+## -----------------------------------------------------------------------------
 train_quantPredictors = train %>% select(where(is.numeric)) %>% select(-SalePrice) 
 train_catPredictors = train %>% select(where(is.character))
 dim(train_quantPredictors)
 dim(train_catPredictors)
-```
 
-Let's quickly do the same split for the test data:
-```{r}
+
+## -----------------------------------------------------------------------------
 test_quantPredictors = test %>% select(where(is.numeric))
 test_catPredictors = test %>% select(where(is.character))
-```
-Let's transform the categorical predictors into factors, which should make it easier to combine categories, create a category like "other", etc. 
-```{r}
+
+
+## -----------------------------------------------------------------------------
 train_catPredictors = train_catPredictors %>% transmute_all(as.factor)
 test_catPredictors = test_catPredictors %>% transmute_all(as.factor)
-```
-
-First, let's see the category names and frequency for each variable:
-```{r eval=FALSE}
-for(i in 1:ncol(train_catPredictors)) {
-  print(colnames(train_catPredictors)[i])
-  print("----")
-  print(as.data.frame(fct_count(unlist(train_catPredictors[,i]))))
-  print("--------------")
-}
-```
 
 
-## Handle Categorical Features
+## ----eval=FALSE---------------------------------------------------------------
+## for(i in 1:ncol(train_catPredictors)) {
+##   print(colnames(train_catPredictors)[i])
+##   print("----")
+##   print(as.data.frame(fct_count(unlist(train_catPredictors[,i]))))
+##   print("--------------")
+## }
 
-### MSZoning (Mei)
-There are no null/missing values in the training set, but there are a few in the test set
-```{r}
+
+## -----------------------------------------------------------------------------
 sum(is.na(train$MSZoning))
 sum(is.na(test$MSZoning))
-```
-Although there are 8 potential categories for this variable, there only exist 5 unique ones in the training and test set. 
-```{r}
+
+
+## -----------------------------------------------------------------------------
 fct_count(train$MSZoning)
 fct_count(test$MSZoning)
-```
-```{r warning=FALSE}
+
+## ----warning=FALSE------------------------------------------------------------
 mszoning.collapse <- function(x) factor(x,
                                      levels=c("FV", "RL", "RP", "RM", "RH"),
                                      labels=c("FV", "RL", "RL", "RO", "RO")) %>%
@@ -95,40 +71,17 @@ mszoning.collapse <- function(x) factor(x,
 
 train <- train %>% mutate(MSZoning = as.factor(MSZoning), MSZoning = mszoning.collapse(MSZoning))
 test <- test %>% mutate(MSZoning = as.factor(MSZoning), MSZoning = mszoning.collapse(MSZoning))
-```
-```{r}
+
+## -----------------------------------------------------------------------------
 fct_count(train$MSZoning)
-```
 
 
-### MSSubClass (Mei)
-There are no null/missing values
-```{r}
+## -----------------------------------------------------------------------------
 sum(is.na(train$MSSubClass))
 sum(is.na(test$MSSubClass))
-```
-Assuming the 1/2 story refers to a basement level as "(un)finished" terminology typically refers to, the categories will be split as follows (counts in parenthesis):
-  - 1-STORY 1946 & NEWER single-family (536)
-  - 1-STORY single-family other
-    - 30	1-STORY 1945 & OLDER (69)
-    - 40	1-STORY W/FINISHED ATTIC ALL AGES (4)
-    - 45	1-1/2 STORY - UNFINISHED ALL AGES (12)
-    - 50	1-1/2 STORY FINISHED ALL AGES (144)
-  - multi-level single-family non PUD
-    - 60	2-STORY 1946 & NEWER (299)
-    - 70	2-STORY 1945 & OLDER (60)
-    - 75	2-1/2 STORY ALL AGES (16)
-    - 80	SPLIT OR MULTI-LEVEL (58)
-    - 85	SPLIT FOYER (20)
-  - other
-    - 90	DUPLEX - ALL STYLES AND AGES (52)
-    - 120	1-STORY PUD (Planned Unit Development) - 1946 & NEWER (87)
-    - 150	1-1/2 STORY PUD - ALL AGES 
-    - 160	2-STORY PUD - 1946 & NEWER (63)
-    - 180	PUD - MULTILEVEL - INCL SPLIT LEV/FOYER (10)
-    - 190	2 FAMILY CONVERSION - ALL STYLES AND AGES (30)
- 
-```{r}
+
+
+## -----------------------------------------------------------------------------
 mssubclass.collapse <- function(x) factor(x,
                                      levels=c("20", "30", "40", "45", "50", "60", "70", "75", "80", "85"),
                                      labels=c("1S SF 1946 & newer", "1S SF other", "1S SF other", "1S SF other", "1S SF other", "multi-level SF non PUD", "multi-level SF non PUD", "multi-level SF non PUD", "multi-level SF non PUD", "multi-level SF non PUD")) %>%
@@ -136,108 +89,80 @@ mssubclass.collapse <- function(x) factor(x,
 
 train <- train %>% mutate(MSSubClass = as.factor(MSSubClass), MSSubClass = mssubclass.collapse(MSSubClass))
 test <- test %>% mutate(MSSubClass = as.factor(MSSubClass), MSSubClass = mssubclass.collapse(MSSubClass))
-```
-```{r}
+
+## -----------------------------------------------------------------------------
 fct_count(train$MSSubClass)
-```
 
 
-### Condition1/Condition2 (Mei)
-There are no null/missing values
-```{r}
+## -----------------------------------------------------------------------------
 sum(is.na(train$Condition1))
 sum(is.na(test$Condition1))
 sum(is.na(train$Condition2))
 sum(is.na(test$Condition2))
-```
-Collapse similar locations together:
-  - All the railroad related locations
-  - All the park related locations
-  - All the street related locations
-This results in only 4 categories:
-  - Normal
-  - Near railroad
-  - Near park
-  - Near arterial or feeder street
-       
-```{r warning=FALSE}
+
+
+## ----warning=FALSE------------------------------------------------------------
 condition.collapse <- function(x) factor(x, 
                                          levels=c("RRNn", "RRAn", "RRNe", "RRAe", "PosN", "PosA", "Artery", "Feedr", "Norm"), 
                                          labels=c('RR', 'RR', 'RR', 'RR', 'Pos', 'Pos', 'St', 'St', "Norm"))
 
 train <- train %>% mutate_at(vars(Condition1, Condition2), condition.collapse)
 test <- test %>% mutate_at(vars(Condition1, Condition2), condition.collapse)
-```
-```{r}
+
+## -----------------------------------------------------------------------------
 fct_count(train$Condition1)
-```
 
-### RoofStyle (Richard)
 
-**combine flat, shed as other; gambrel, mansard, gable as gable; leave others as is**
-
-```{r}
+## -----------------------------------------------------------------------------
 roof_price <- train %>% group_by(RoofStyle) %>% summarize(count=n(),
   mean(SalePrice), sd(SalePrice))
 
 roof_price
-```
 
-```{r}
+
+## -----------------------------------------------------------------------------
 train$RoofStyle <- fct_collapse(train$RoofStyle, Other = c("Flat", "Shed"))
 train$RoofStyle <- fct_collapse(train$RoofStyle, Gable = c("Gable", "Gambrel", "Mansard"))
-```
-Let's do the same on the testing dataset:
-```{r}
+
+
+## -----------------------------------------------------------------------------
 test$RoofStyle <- fct_collapse(test$RoofStyle, Other = c("Flat", "Shed"))
 test$RoofStyle <- fct_collapse(test$RoofStyle, Gable = c("Gable", "Gambrel", "Mansard"))
-```
 
 
-### BldgType
-Combine 2FmCon, Duplex as multifamily; leave others as is
-
-```{r}
+## -----------------------------------------------------------------------------
 bldg_price <- train %>% group_by(BldgType) %>% summarize(count=n(),
   mean(SalePrice), sd(SalePrice))
 
 bldg_price
-```
 
-```{r}
+
+## -----------------------------------------------------------------------------
 train$BldgType <- fct_collapse(train$BldgType, MultiFam = c("2fmCon", "Duplex"))
-```
-Let's do the same on the testing dataset:
-```{r}
+
+
+## -----------------------------------------------------------------------------
 test$BldgType <- fct_collapse(test$BldgType, MultiFam = c("2fmCon", "Duplex"))
-```
 
-### HouseStyle
-Combine 1.5Fin, 1Story, split foyer, split level as less than 2 story; 2.5fin, 2Story as two story or greater; leave 1.5Unf and 2.5Unf as is since they drag down property values
 
-```{r}
+## -----------------------------------------------------------------------------
 style_price <- train %>% group_by(HouseStyle) %>% summarize(count=n(),
   mean(SalePrice), sd(SalePrice))
 
 style_price 
-```
 
-```{r}
+
+## -----------------------------------------------------------------------------
 train$HouseStyle <- fct_collapse(train$HouseStyle, Less2story = c("1Story", "1.5Fin", "SFoyer", "SLvl"))
 train$HouseStyle <- fct_collapse(train$HouseStyle, EqMore2story = c("2Story", "2.5Fin"))
-```
 
-And on the test data:
-```{r}
+
+## -----------------------------------------------------------------------------
 test$HouseStyle <- fct_collapse(test$HouseStyle, Less2story = c("1Story", "1.5Fin", "SFoyer", "SLvl"))
 test$HouseStyle <- fct_collapse(test$HouseStyle, EqMore2story = c("2Story", "2.5Fin"))
-```
 
 
-### Kyle:
-
-Mei completely altered the PoolQC-related code to fix model.matrix errors
-```{r}
+## -----------------------------------------------------------------------------
 poolqc.collapse <- function(x) factor(x,
                                      levels=c("Ex", "Gd", "TA", "Fa"),
                                      labels=c("Ex", "Gd", "TA", "Fa")) %>%
@@ -245,60 +170,54 @@ poolqc.collapse <- function(x) factor(x,
 
 train <- train %>% mutate(PoolQC = as.factor(PoolQC), PoolQC = poolqc.collapse(PoolQC))
 test <- test %>% mutate(PoolQC = as.factor(PoolQC), PoolQC = poolqc.collapse(PoolQC))
-```
 
 
-```{r}
+## -----------------------------------------------------------------------------
 cleanfence <- as.character(train_catPredictors$Fence)
 cleanfence[is.na(cleanfence)] <- "none"
 cleanfence <- as.factor(cleanfence)
-```
 
-```{r}
+
+## -----------------------------------------------------------------------------
 cleanfunc <- as.character(train_catPredictors$Functional)
 cleanfunc[cleanfunc == 'Min1' | cleanfunc == 'Min2'] <- "Minor"
 cleanfunc[cleanfunc == 'Maj1' | cleanfunc == 'Maj2'] <- "Major"
 cleanfunc[cleanfunc == 'Sev' | cleanfunc == 'Sal'] <- "Severe"
 cleanfunc <- as.factor(cleanfunc)
-```
 
-```{r}
+
+## -----------------------------------------------------------------------------
 train$Fence <- cleanfence
 train$Functional <- cleanfunc
-```
 
-```{r}
+
+## -----------------------------------------------------------------------------
 cleanfence <- as.character(test_catPredictors$Fence)
 cleanfence[is.na(cleanfence)] <- "none"
 cleanfence <- as.factor(cleanfence)
-```
 
-```{r}
+
+## -----------------------------------------------------------------------------
 cleanfunc <- as.character(test_catPredictors$Functional)
 cleanfunc[cleanfunc == 'Min1' | cleanfunc == 'Min2'] <- "Minor"
 cleanfunc[cleanfunc == 'Maj1' | cleanfunc == 'Maj2'] <- "Major"
 cleanfunc[cleanfunc == 'Sev' | cleanfunc == 'Sal'] <- "Severe"
 cleanfunc <- as.factor(cleanfunc)
-```
 
-```{r}
+
+## -----------------------------------------------------------------------------
 test$Fence <- cleanfence
 test$Functional <- cleanfunc
-```
 
 
-### Mileva: Heating, Electrical, FireplaceQu, HeatingQC, CentralAir
-The processing for the Heating, Electrical, and FireplaceQu predictors is below. The HeatingQC and CentralAir predictors did not require any additional processing. 
-
-```{r}
+## -----------------------------------------------------------------------------
 # Heating: Collapsed categores with low frequencies into "other"
 heating <- as.factor(train_catPredictors$Heating)
 heating <- fct_other(heating, keep=c("GasA", "GasW"))
 train$Heating <- heating
-```
 
-(Same functionality, altered by Mei to fix model.matrix errors)
-```{r}
+
+## -----------------------------------------------------------------------------
 # Electrical: Collapsed similar categories together and handled missing values
 electrical.collapse <- function(x) factor(x,
                                      levels=c("FuseA", "FuseF", "FuseP"),
@@ -307,53 +226,35 @@ electrical.collapse <- function(x) factor(x,
 
 train <- train %>% mutate(Electrical = as.factor(Electrical), Electrical = electrical.collapse(Electrical))
 test <- test %>% mutate(Electrical = as.factor(Electrical), Electrical = electrical.collapse(Electrical))
-```
 
-```{r}
+
+## -----------------------------------------------------------------------------
 # Fireplace: Handled missing values
 fireplace <- as.character(train_catPredictors$FireplaceQu)
 fireplace[is.na(fireplace)] <- "none"
 train$FireplaceQu <- as.factor(fireplace)
-```
 
-Need to do the same for test dataset:
-```{r}
+
+## -----------------------------------------------------------------------------
 # Heating: Collapsed categores with low frequencies into "other"
 heating <- as.factor(test_catPredictors$Heating)
 heating <- fct_other(heating, keep=c("GasA", "GasW"))
 test$Heating <- heating
-```
 
-(Mei removed the Electrical section as it was handled earlier)
 
-```{r}
+## -----------------------------------------------------------------------------
 # Fireplace: Handled missing values
 fireplace <- as.character(test_catPredictors$FireplaceQu)
 fireplace[is.na(fireplace)] <- "none"
 test$FireplaceQu <- as.factor(fireplace)
-```
 
-### RoofMatl - Dropped (Thomas)
 
-1434/1460 entries in the training set are CompShg.  
-The off-materials aren't meaningfully different price-wise as an 'other' group.  Wood Shingles ('wdshngl') does contain 2 houses in the 99th percentile sale price, but with only 6 entries I don't think it's safe to include.  
-I think we're better off dropping this one.
-```{r}
+## -----------------------------------------------------------------------------
 train <- select(train, -c(RoofMatl))
 test <- select(test, -c(RoofMatl))
-```
 
-### Exterior1st/2nd (Thomas)
-Fixed the following label mis-matches between columns:Exterior1st - WdShing,CemntBd,BrkComm, Exterior2nd - Wd Shng,CmentBd,Brk Cmn
 
-~90% of these two variables matched.
-In the ~10% that didn't match, Exterior1st is generally a better predictor of sale price than Exterior2nd.
-I converted Exterior2nd into a boolean, TRUE if Exterior1st!=Exterior2nd.
-
-I combined the bottom half of Exterior1st's categories into an 'Other' category.
-  (This leaves 7, but Brick Face/Cement Board seem to be decent categories for predicting sale price, so I didn't want to drop them.)
-
-```{r}
+## -----------------------------------------------------------------------------
 train$Exterior2nd[train$Exterior2nd=='Wd Shng'] <- 'WdShing'
 train$Exterior2nd[train$Exterior2nd=='CmentBd'] <- 'CemntBd'
 train$Exterior2nd[train$Exterior2nd=='Brk Cmn'] <- 'BrkComm'
@@ -365,41 +266,35 @@ test$Exterior2nd[test$Exterior2nd=='CmentBd']<- 'CemntBd'
 test$Exterior2nd[test$Exterior2nd=='Brk Cmn']<- 'BrkComm'
 test$Exterior2nd <- test$Exterior1st!=test$Exterior2nd
 test$Exterior1st <- fct_collapse(test$Exterior1st, Other = c("AsbShng","AsphShn","CBlock","ImStucc","BrkComm","Stone","Stucco","WdShing"))
-```
 
-Bernhard: I also changed `ExterCond`:
-```{r}
+
+## -----------------------------------------------------------------------------
 table(train$ExterCond)
 table(test$ExterCond)
-```
-`Po` and `Ex` are rather uncommon, so we collapse them all into "other": 
-```{r}
+
+
+## -----------------------------------------------------------------------------
 train$ExterCond = fct_collapse(train$ExterCond, other=c("Ex", "Po"))
 test$ExterCond = fct_collapse(test$ExterCond, other=c("Ex", "Po"))
 
 summary(train$ExterCond)
 summary(test$ExterCond)
-```
 
-### SaleType
-WD, New, and Court deed/estate were the three most common categories, and all 3 were significant when using SaleType as sole predictor.
-Combined the other categories into 'Other'.
-```{r}
+
+## -----------------------------------------------------------------------------
 train$SaleType <- fct_collapse(train$SaleType, Other = c("ConLD", "ConLw", "ConLI", "CWD", "Oth", "Con"))
 test$SaleType <- fct_collapse(test$SaleType, Other = c("ConLD", "ConLw", "ConLI", "CWD", "Oth", "Con"))
-```
 
-### Marina: Neighborhood, GarageType, GarageFinish, GarageQual, GarageCond
 
-```{r}
+## -----------------------------------------------------------------------------
 ### Neighborhood ###
 # Collapse categores with low frequencies into "other"
 
 #Explore counts
 train_catPredictors %>% count(Neighborhood, sort = TRUE)
-```
 
-```{r}
+
+## -----------------------------------------------------------------------------
 #Factorize
 neighborhood <- as.factor(train_catPredictors$Neighborhood)
 
@@ -407,68 +302,62 @@ neighborhood <- as.factor(train_catPredictors$Neighborhood)
 neighborhood <- fct_collapse(neighborhood, Other = c("MeadowV","BrDale", "Veenker", "NPkVill", "Blueste", "IDOTRR", "ClearCr", "StoneBr" ,"SWISU", "Blmngtn"))
 
 levels(neighborhood) #New levels of the factor
-```
 
 
-```{r}
+## -----------------------------------------------------------------------------
 #Update column with new values
 train$Neighborhood <- neighborhood
-```
 
-Need to do the same on test data:
-```{r}
+
+## -----------------------------------------------------------------------------
 #Factorize
 neighborhood <- as.factor(test_catPredictors$Neighborhood)
 
 #Convert to "Other" any category that represents less than 2% of the data
 neighborhood <- fct_collapse(neighborhood, Other = c("MeadowV","BrDale", "Veenker", "NPkVill", "Blueste", "IDOTRR", "ClearCr", "StoneBr" ,"SWISU", "Blmngtn"))
 levels(neighborhood) #New levels of the factor
-```
 
 
-```{r}
+## -----------------------------------------------------------------------------
 #Update column with new values
 test$Neighborhood <- neighborhood
-```
 
-**Anyone sees the issue??**
-```{r}
+
+## -----------------------------------------------------------------------------
 table(train$Neighborhood)
 table(test$Neighborhood)
-```
 
-```{r}
+
+## -----------------------------------------------------------------------------
 ### GarageType ###
 
 #Explore counts
 train_catPredictors %>% count(GarageType, sort = TRUE)
-```
 
-```{r}
+
+## -----------------------------------------------------------------------------
 #Handle NAs
 #According to the data description, NA means no garage. 
 #Change NA category to "none" to avoid issues.
 garageType <- as.character(train_catPredictors$GarageType)
 garageType[is.na(garageType)] <- "none"
 garageType <- as.factor(garageType)
-```
 
-```{r}
+
+## -----------------------------------------------------------------------------
 #Collapse into "Other" categries that represent less than 5% of the data
 garageType <- garageType %>% 
   fct_lump(prop=0.05, other_level='Other')
 
 #levels(garageType) #New levels of the factor
-```
 
 
-```{r}
+## -----------------------------------------------------------------------------
 #Update column with new values
 train$GarageType <- garageType
-```
 
-**Attention!! Need to do the same on the test data:** 
-```{r}
+
+## -----------------------------------------------------------------------------
 garageType <- as.character(test$GarageType)
 garageType[is.na(garageType)] <- "none"
 garageType <- as.factor(garageType)
@@ -477,16 +366,15 @@ garageType <- garageType %>%
 levels(garageType)
 levels(train$GarageType)
 test$GarageType <- garageType
-```
 
 
-```{r}
+## -----------------------------------------------------------------------------
 ### GarageFinish ###
 
 #Explore counts
 train_catPredictors %>% count(GarageFinish, sort = TRUE)
-```
-```{r}
+
+## -----------------------------------------------------------------------------
 #Handle NAs
 #According to the data description, NA means no garage. 
 #Change NA category to "none" to avoid issues.
@@ -495,15 +383,14 @@ garageFinish[is.na(garageFinish)] <- "none"
 garageFinish <- as.factor(garageFinish)
 
 #No need to collapse categories
-```
 
-```{r}
+
+## -----------------------------------------------------------------------------
 #Update column with new values
 train$GarageFinish <- garageFinish
-```
 
-Need to do the same for the test data:
-```{r}
+
+## -----------------------------------------------------------------------------
 #Handle NAs
 #According to the data description, NA means no garage. 
 #Change NA category to "none" to avoid issues.
@@ -511,15 +398,14 @@ garageFinish <- as.character(test_catPredictors$GarageFinish)
 garageFinish[is.na(garageFinish)] <- "none"
 garageFinish <- as.factor(garageFinish)
 #No need to collapse categories
-```
 
-```{r}
+
+## -----------------------------------------------------------------------------
 #Update column with new values
 test$GarageFinish <- garageFinish
-```
 
-Mei changed garage qual so that model.matrix wouldn't error
-```{r}
+
+## -----------------------------------------------------------------------------
 garagequal.collapse <- function(x) factor(x,
                                      levels=c("Ex", "Gd", "TA", "Fa", "Po"),
                                      labels=c("Gd", "Gd", "TA", "Po", "Po")) %>%
@@ -527,85 +413,80 @@ garagequal.collapse <- function(x) factor(x,
 
 train <- train %>% mutate(GarageQual = as.factor(GarageQual), GarageQual = garagequal.collapse(GarageQual))
 test <- test %>% mutate(GarageQual = as.factor(GarageQual), GarageQual = garagequal.collapse(GarageQual))
-```
 
 
-```{r eval=FALSE, include=FALSE}
-### GarageQual ###
-
-#Explore counts
-train_catPredictors %>% count(GarageQual, sort = TRUE)
-```
-
-```{r eval=FALSE, include=FALSE}
-#Handle NAs
-#According to the data description, NA means no garage. 
-#Change NA category to "none" to avoid issues.
-garageQual <- as.character(train_catPredictors$GarageQual)
-garageQual[is.na(garageQual)] <- "none"
-garageQual <- as.factor(garageQual)
-```
-
-```{r eval=FALSE, include=FALSE}
-#Collapse categories: 
-# - Let's collapse Ex	(Excellent) and Gd	(Good) into 1 category: Gd
-# - Let's collapse Fa	(Fair) and Po	(Poor) into 1 category: Po
-# - None and TA remains the same
-
-garageQual <- fct_collapse(garageQual, Gd = c("Ex","Gd"))
-garageQual <- fct_collapse(garageQual, Po = c("Fa","Po"))
-```
+## ----eval=FALSE, include=FALSE------------------------------------------------
+## ### GarageQual ###
+## 
+## #Explore counts
+## train_catPredictors %>% count(GarageQual, sort = TRUE)
 
 
-```{r eval=FALSE, include=FALSE}
-#Update column with new values
-train$GarageQual <- garageQual
-```
-
-Need to do the same for test data:
-```{r eval=FALSE, include=FALSE}
-#Handle NAs
-#According to the data description, NA means no garage. 
-#Change NA category to "none" to avoid issues.
-garageQual <- as.character(test_catPredictors$GarageQual)
-garageQual[is.na(garageQual)] <- "none"
-garageQual <- as.factor(garageQual)
-```
-
-```{r eval=FALSE, include=FALSE}
-#Collapse categories: 
-# - Let's collapse Ex	(Excellent) and Gd	(Good) into 1 category: Gd
-# - Let's collapse Fa	(Fair) and Po	(Poor) into 1 category: Po
-# - None and TA remains the same
-
-garageQual <- fct_collapse(garageQual, Gd = c("Ex","Gd"))
-garageQual <- fct_collapse(garageQual, Po = c("Fa","Po"))
-```
+## ----eval=FALSE, include=FALSE------------------------------------------------
+## #Handle NAs
+## #According to the data description, NA means no garage.
+## #Change NA category to "none" to avoid issues.
+## garageQual <- as.character(train_catPredictors$GarageQual)
+## garageQual[is.na(garageQual)] <- "none"
+## garageQual <- as.factor(garageQual)
 
 
-```{r eval=FALSE, include=FALSE}
-#Update column with new values
-test$GarageQual <- garageQual
-```
+## ----eval=FALSE, include=FALSE------------------------------------------------
+## #Collapse categories:
+## # - Let's collapse Ex	(Excellent) and Gd	(Good) into 1 category: Gd
+## # - Let's collapse Fa	(Fair) and Po	(Poor) into 1 category: Po
+## # - None and TA remains the same
+## 
+## garageQual <- fct_collapse(garageQual, Gd = c("Ex","Gd"))
+## garageQual <- fct_collapse(garageQual, Po = c("Fa","Po"))
 
 
-```{r}
+## ----eval=FALSE, include=FALSE------------------------------------------------
+## #Update column with new values
+## train$GarageQual <- garageQual
+
+
+## ----eval=FALSE, include=FALSE------------------------------------------------
+## #Handle NAs
+## #According to the data description, NA means no garage.
+## #Change NA category to "none" to avoid issues.
+## garageQual <- as.character(test_catPredictors$GarageQual)
+## garageQual[is.na(garageQual)] <- "none"
+## garageQual <- as.factor(garageQual)
+
+
+## ----eval=FALSE, include=FALSE------------------------------------------------
+## #Collapse categories:
+## # - Let's collapse Ex	(Excellent) and Gd	(Good) into 1 category: Gd
+## # - Let's collapse Fa	(Fair) and Po	(Poor) into 1 category: Po
+## # - None and TA remains the same
+## 
+## garageQual <- fct_collapse(garageQual, Gd = c("Ex","Gd"))
+## garageQual <- fct_collapse(garageQual, Po = c("Fa","Po"))
+
+
+## ----eval=FALSE, include=FALSE------------------------------------------------
+## #Update column with new values
+## test$GarageQual <- garageQual
+
+
+## -----------------------------------------------------------------------------
 ### GarageCond ###
 
 #Explore counts
 train_catPredictors %>% count(GarageCond, sort = TRUE)
-```
 
-```{r}
+
+## -----------------------------------------------------------------------------
 #Handle NAs
 #According to the data description, NA means no garage. 
 #Change NA category to "none" to avoid issues.
 garageCond <- as.character(train_catPredictors$GarageCond)
 garageCond[is.na(garageCond)] <- "none"
 garageCond <- as.factor(garageCond)
-```
 
-```{r}
+
+## -----------------------------------------------------------------------------
 #Collapse categories: 
 # - Let's collapse Ex	(Excellent) and Gd	(Good) into 1 category: Gd
 # - Let's collapse Fa	(Fair) and Po	(Poor) into 1 category: Po
@@ -614,24 +495,23 @@ garageCond <- as.factor(garageCond)
 garageCond <- fct_collapse(garageCond, Gd = c("Ex","Gd"))
 garageCond <- fct_collapse(garageCond, Po = c("Fa","Po"))
 
-```
 
-```{r}
+
+## -----------------------------------------------------------------------------
 #Update column with new values
 train$GarageCond <- garageCond
-```
 
-Need to do the same with test data:
-```{r}
+
+## -----------------------------------------------------------------------------
 #Handle NAs
 #According to the data description, NA means no garage. 
 #Change NA category to "none" to avoid issues.
 garageCond <- as.character(test_catPredictors$GarageCond)
 garageCond[is.na(garageCond)] <- "none"
 garageCond <- as.factor(garageCond)
-```
 
-```{r}
+
+## -----------------------------------------------------------------------------
 #Collapse categories: 
 # - Let's collapse Ex	(Excellent) and Gd	(Good) into 1 category: Gd
 # - Let's collapse Fa	(Fair) and Po	(Poor) into 1 category: Po
@@ -640,68 +520,56 @@ garageCond <- as.factor(garageCond)
 garageCond <- fct_collapse(garageCond, Gd = c("Ex","Gd"))
 garageCond <- fct_collapse(garageCond, Po = c("Fa","Po"))
 
-```
 
-```{r}
+
+## -----------------------------------------------------------------------------
 #Update column with new values
 test$GarageCond <- garageCond
-```
 
-Note: We also need to discuss the NA's in the numerical variable GarageYrBlt, see later.
 
-### Paul: LotShape, LotConfig, LandContour
-
-Fortunately there are no NA values in  either the test or train sets.
-```{r}
+## -----------------------------------------------------------------------------
 sum(is.na(train$LotShape))
 sum(is.na(test$LotShape))
 sum(is.na(train$LotConfig))
 sum(is.na(test$LotConfig))
 sum(is.na(train$LandContour))
 sum(is.na(test$LandContour))
-```
 
-```{r}
+
+## -----------------------------------------------------------------------------
 fct_count(train$LotShape)
 fct_count(test$LotShape)
 fct_count(train$LotConfig)
 fct_count(test$LotConfig)
 fct_count(train$LandContour)
 fct_count(test$LandContour)
-```
 
-All of these variables are highly imbalanced. In each there is one category that represents a "regular" shape, configuration, or land contour, which amount for ~2/3 or more of the total instances. Thus, I collapsed all of the less represented "irregular" categories into one.
 
-```{r}
+## -----------------------------------------------------------------------------
 train$LotShape <- fct_collapse(train$LotShape, Irregular = c("IR1", "IR2", "IR3"))
 train$LotConfig <- fct_collapse(train$LotConfig, Other = c("Corner","CulDSac", "FR2", "FR3"))
 train$LandContour <- fct_collapse(train$LandContour, NonLvl = c("Bnk", "HLS", "Low"))
-```
 
 
-```{r}
+## -----------------------------------------------------------------------------
 fct_count(train$LotShape)
 fct_count(train$LotConfig)
 fct_count(train$LandContour)
-```
 
-Need to do the same for the test data:
-```{r}
+
+## -----------------------------------------------------------------------------
 test$LotShape <- fct_collapse(test$LotShape, Irregular = c("IR1", "IR2", "IR3"))
 test$LotConfig <- fct_collapse(test$LotConfig, Other = c("Corner","CulDSac", "FR2", "FR3"))
 test$LandContour <- fct_collapse(test$LandContour, NonLvl = c("Bnk", "HLS", "Low"))
-```
 
 
-## Removing/Replacing Missing Values
-It is best to get the training dataset that has no missing values (since they will be discarded in the fitting process of the full model anyway), and then check if any other predictors are constant. Which variables still have a lot of missing values:
-```{r}
+## -----------------------------------------------------------------------------
 train %>%
   summarize(across(everything(), ~sum(is.na(.x)))) %>%
   sort(decreasing = TRUE)
-```
-For the variable `MiscFeature`, almost all values are missing. However, looking in the data description file, this actually means that the house simply doesn't have any other features. So, we set the NA's to "none", in both the train and test datasets. The same applies to `Alley`, where an NA means "none":
-```{r}
+
+
+## -----------------------------------------------------------------------------
 misc.collapse <- function(x) factor(x,
                                      levels=c("Elev", "Gar2", "Othr", "Shed", "TenC"),
                                      labels=c("Elev", "Gar2", "Other", "Shed", "TenC")) %>%
@@ -716,18 +584,14 @@ test$MiscFeature = fct_explicit_na(test$MiscFeature, na_level="none")
 
 train$Alley = fct_explicit_na(train$Alley, na_level="none")
 test$Alley = fct_explicit_na(test$Alley, na_level="none")
-```
-For `LotFrontage`, the missing values are genuine. (But lets hope that the value being missing has no connection to the sales price of a house.)
 
 
-For now, I'm going to drop `LotFrontage` from consideration, although we could impute values. I'm also going to drop `GarageYrBlt` from consideration, because it has around 80 missing values for those garages where there is no information. Since we have info on the garage from other variables, I rather keep 81 observations in the dataset, but not include `GarageYrBlt`. So, I'm going to drop `GarageYrBlt` from the list of predictors:
-```{r}
+## -----------------------------------------------------------------------------
 train = train %>% select(-LotFrontage, -GarageYrBlt)
 test = test %>% select(-LotFrontage, -GarageYrBlt)
-```
 
-We now need to handle the Basement values. We need to replace the NA's with "none":
-```{r}
+
+## -----------------------------------------------------------------------------
 train$BsmtQual = fct_explicit_na(train$BsmtQual, na_level="none")
 train$BsmtCond = fct_explicit_na(train$BsmtCond, na_level="none")
 train$BsmtExposure = fct_explicit_na(train$BsmtExposure, na_level="none")
@@ -743,108 +607,92 @@ test$BsmtFinType2 = fct_explicit_na(test$BsmtFinType2, na_level="none")
 train %>%
   summarize(across(everything(), ~sum(is.na(.x)))) %>%
   sort(decreasing = TRUE)
-```
-For `MasVnrType`, I will introduce a new category "missing", but for `MasVnrArea` I will just imput 0 for those 8 missing areas: 
-```{r}
+
+
+## -----------------------------------------------------------------------------
 summary(train$MasVnrType)
 train$MasVnrType = fct_explicit_na(train$MasVnrType, na_level="missing")
 train$MasVnrArea[is.na(train$MasVnrArea)] = 0
 
 test$MasVnrType = fct_explicit_na(test$MasVnrType, na_level="missing")
 test$MasVnrArea[is.na(test$MasVnrArea)] = 0
-```
 
-We now have no missing predictor values in the training data:
-```{r}
+
+## -----------------------------------------------------------------------------
 dim(train)
 dim(train %>% drop_na())
-```
-## Handling Constant Predictors
-Another issue with fitting a full model is the number of unique values a predictor has. If it only has **one unique value (or one unique factor level)**, then it doesn't vary, i.e., it is a constant. This causes issues because then the design matrix $X$ is not full rank. The column for the intercept is a column of all 1's, and then each column for a predictor which is constant is also a column of a fixed number. This causes a linear dependency between these columns, and the design matrix is not full rank.
 
-First, lets turn the character variables into factors, both in the training and testing data. This will pay off later:
-```{r}
+
+## -----------------------------------------------------------------------------
 train = train %>% mutate(across(where(is.character), as.factor))
 test = test %>% mutate(across(where(is.character), as.factor))
-```
 
-Let's find the predictors which have constant values throughout:
-```{r}
+
+## -----------------------------------------------------------------------------
 train %>%
   summarize(across(everything(), ~length(unique(.x)))) %>%
   sort()
-```
-There doesn't seem to be a variable that has only one unique value or one unique factor level. So we should be good to go.
 
-Having done/checked all that, we are ready to fit the full model with all variables. However, using `> fit2 = lm(log(SalePrice) ~ . , data=train %>% select(-Id, -SalePrice))`, I ran into a problem, where R shows the error message `contrasts can be applied only to factors with 2 or more levels`. 
 
-With trial and error, I saw that we can fit a model with the first 8 predictors, but when we include 'Utilities', there is an issue
-```{r}
+## -----------------------------------------------------------------------------
 fit2 = lm(log(train$SalePrice) ~ . , data=train[,2:9])
 summary(fit2)
-```
 
-What is going on with utilities:
-```{r}
+
+## -----------------------------------------------------------------------------
 summary(train$Utilities)
-```
-We see that it is almost constant! There is only one observation with a different utility type. Probably, that observation has some missing values on some other variables, and hence is removed from the design matrix, making it an all constant predictor. Let's check:
-```{r}
-train[train$Utilities == 'NoSeWa',]
-```
-There we go, `LotFrontage` is `NA` for this particular house, so it is removed, and the remaining houses all have the same utility type.
 
-Let's now revisit check if any predictors are constant:
-```{r}
+
+## -----------------------------------------------------------------------------
+train[train$Utilities == 'NoSeWa',]
+
+
+## -----------------------------------------------------------------------------
 train %>%
   summarize(across(everything(), ~length(unique(.x)))) %>%
   sort()
-```
-Seems fine, although for `Utilities`:
-```{r}
-summary(train$Utilities)
-```
 
-This means we also need to drop `Utilities` from the test data.
-```{r}
+
+## -----------------------------------------------------------------------------
+summary(train$Utilities)
+
+
+## -----------------------------------------------------------------------------
 train =  train %>% select(-Utilities)
 test =  test %>% select(-Utilities)
-```
 
-## NA's in Test Data
-Just like in the training dataset, we might have some NA's in the test data:
-```{r}
+
+## -----------------------------------------------------------------------------
 isNAtest = apply(test,1,function(x) any(is.na(x)))
 sum(isNAtest)
-```
-We still have 11 observations with at least one missing predictor. This is a problem since when we use all predictors, we will not be able to obtain a predicted sales price for these 11 houses.
-Which predictors have the most missing values:
-```{r}
+
+
+## -----------------------------------------------------------------------------
 test %>%
   summarize(across(everything(), ~sum(is.na(.x)))) %>%
   sort(decreasing = TRUE)
-```
-### MSZoning:
-```{r}
+
+
+## -----------------------------------------------------------------------------
 summary(train$MSZoning)
 summary(test$MSZoning)
 test$MSZoning = fct_explicit_na(test$MSZoning, na_level="other")
 summary(test$MSZoning)
-```
-### BsmtFullBath:
-```{r}
+
+
+## -----------------------------------------------------------------------------
 summary(train$BsmtFullBath)
 summary(test$BsmtFullBath)
 test$BsmtFullBath[is.na(test$BsmtFullBath)] = 0
-```
-### BsmtHalfBath:
-```{r}
+
+
+## -----------------------------------------------------------------------------
 summary(train$BsmtHalfBath)
 summary(test$BsmtHalfBath)
 test$BsmtHalfBath[is.na(test$BsmtHalfBath)] = 0
-```
-### Functional:
-```{r}
+
+
+## -----------------------------------------------------------------------------
 summary(train$Functional)
 summary(test$Functional)
 train$Functional = train$Functional == "Typ"
@@ -852,65 +700,65 @@ test$Functional = test$Functional == "Typ"
 test$Functional[is.na(test$Functional)] = TRUE
 summary(train$Functional)
 summary(test$Functional)
-```
-### Exterior1st:
-```{r}
+
+
+## -----------------------------------------------------------------------------
 summary(train$Exterior1st)
 summary(test$Exterior1st)
 test$Exterior1st <- fct_explicit_na(test$Exterior1st, na_level="Other")
 summary(test$Exterior1st)
-```
-### Exterior2nd:
-```{r}
+
+
+## -----------------------------------------------------------------------------
 summary(train$Exterior2nd)
 summary(test$Exterior2nd)
 test$Exterior2nd[is.na(test$Exterior2nd)] = FALSE
-```
-### BsmtFinSF1
-```{r}
+
+
+## -----------------------------------------------------------------------------
 summary(train$BsmtFinSF1)
 summary(test$BsmtFinSF1)
 test$BsmtFinSF1[is.na(test$BsmtFinSF1)] = 0
-```
-### BsmtFinSF2
-```{r}
+
+
+## -----------------------------------------------------------------------------
 summary(train$BsmtFinSF2)
 summary(test$BsmtFinSF2)
 test$BsmtFinSF2[is.na(test$BsmtFinSF2)] = 0
-```
-### BsmtUnfSF
-```{r}
+
+
+## -----------------------------------------------------------------------------
 summary(train$BsmtUnfSF)
 summary(test$BsmtUnfSF)
 test$BsmtUnfSF[is.na(test$BsmtUnfSF)] = 460
-```
-### TotalBsmtSF
-```{r}
+
+
+## -----------------------------------------------------------------------------
 summary(train$TotalBsmtSF)
 summary(test$TotalBsmtSF)
 test$TotalBsmtSF[is.na(test$TotalBsmtSF)] = 988
-```
-### KitchenQual
-```{r}
+
+
+## -----------------------------------------------------------------------------
 summary(train$KitchenQual)
 summary(test$KitchenQual)
 test$KitchenQual[is.na(test$KitchenQual)] = "TA"
-```
-### GarageCars
-```{r}
+
+
+## -----------------------------------------------------------------------------
 summary(train$GarageCars)
 summary(test$GarageCars)
 test$GarageCars[is.na(test$GarageCars)] = 1.766
-```
-### GarageArea
-```{r}
+
+
+## -----------------------------------------------------------------------------
 summary(train$GarageArea)
 summary(test$GarageArea)
 test$GarageArea[is.na(test$GarageArea)] = 480
-```
-### SaleType
-```{r}
+
+
+## -----------------------------------------------------------------------------
 summary(train$SaleType)
 summary(test$SaleType)
 test$SaleType[is.na(test$SaleType)] = "Other"
-```
+
