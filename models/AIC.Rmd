@@ -102,12 +102,25 @@ fAIC.2.prediction[,1][fAIC.2.prediction[,1]<=low.q]<-low.q
 fAIC.2.prediction[,1][fAIC.2.prediction[,1]>=high.q]<-high.q
 bAIC.2.prediction[,1][bAIC.2.prediction[,1]<=low.q]<-low.q
 bAIC.2.prediction[,1][bAIC.2.prediction[,1]>=high.q]<-high.q
-print(c(min(fAIC.2.prediction[,1]),max(fAIC.2.prediction[,1])))
+#print(c(min(fAIC.2.prediction[,1]),max(fAIC.2.prediction[,1])))
 ```
 
-Now we'll submit the model and see how it performs.  They came out extremely similar, so I arbitrarily chose bAIC.
+Now we'll submit the models and see how they perform.
 ```{r}
+
+df.output<-as.data.frame(cbind(test$Id,bAIC.prediction[,1]))
+colnames(df.output)<-c('Id','SalePrice')
+write.csv(df.output,'..\\AIC_backward_1.csv')
+
+df.output<-as.data.frame(cbind(test$Id,bAIC.prediction[,1]))
+colnames(df.output)<-c('Id','SalePrice')
+write.csv(df.output,'..\\AIC_forward_1.csv')
+
 df.output<-as.data.frame(cbind(test$Id,bAIC.2.prediction[,1]))
 colnames(df.output)<-c('Id','SalePrice')
-write.csv(df.output,'..\\AIC_prediction.csv')
+write.csv(df.output,'..\\AIC_backward_2.csv')
+
+df.output<-as.data.frame(cbind(test$Id,bAIC.2.prediction[,1]))
+colnames(df.output)<-c('Id','SalePrice')
+write.csv(df.output,'..\\AIC_forward_2.csv')
 ```
