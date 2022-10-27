@@ -34,7 +34,7 @@ fAIC.prediction<-predict(lm.fAIC, newdata=test, interval="prediction")
 bAIC.prediction<-predict(lm.bAIC, newdata=test, interval = "prediction")
 dAIC.prediction<-predict(lm.dAIC, newdata=test, interval="prediction")
 ```
-
+Let's check how our model performs on the training set.
 ```{r}
 c(summary(lm.fAIC)$fstatistic[1],summary(lm.fAIC)$r.squared,dim(as.data.frame(lm.fAIC$coefficients))[1])
 c(summary(lm.bAIC)$fstatistic[1],summary(lm.bAIC)$r.squared,dim(as.data.frame(lm.bAIC$coefficients))[1])
@@ -43,45 +43,46 @@ c(summary(lm.dAIC)$fstatistic[1],summary(lm.dAIC)$r.squared,dim(as.data.frame(lm
 "both" and "backward" AIC gave us the same model, so we'll just run forward/backward from here and compare those two.
 
 ```{r}
-plot(lm.bAIC,which=c(1))
-plot(lm.fAIC,which=c(1))
+plot(lm.bAIC,which=c(1,2,3,4))
+plot(lm.fAIC,which=c(1,2,3,4))
 ```
-Three houses (524,692,1171) had extremely high residuals, with 692 & 1171 also having high leverage.
+Three houses (524,692,1171) had extremely high residuals, with 692 & 1171 also having high leverage.  1424 and (to a lesser extent) 1299 stand out, having a cook's D>1.
 ```{r}
-train[c(524,692,1171),]
+train[c(524,692,1171,1299,1424),]
 ```
-692 is also the highest sale price in the training set, so it makes sense that it's skewing the model somewhat.  524 is a newer house on a fairly large, irregular lot with a low sale price, while 1171 is an older house on a fairly small lot.
+692 is also the highest sale price in the training set, so it makes sense that it's skewing the model somewhat.  524 is a newer house on a fairly large, irregular lot with a low sale price, while 1171 is an older house on a fairly small lot.  1299 and 1424 don't stand out just looking at them, other than being very new & fairly old buildings, respectively.
 
-I decided to drop these three when fitting the model.
+I decided to drop these five when fitting the model.
+
+The poolQC variable has a factor mis-match between the two sets.  Almost the entire variable is 'none' values, so I decided to drop it.
 ```{r}
 train.temp<-train %>%
-  filter(!row_number() %in% c(524,692,1171))
+  filter(!row_number() %in% c(524,692,1171,1299,1424)) %>% dplyr::select(-c(PoolQC))
+test<-dplyr::select(test,-c(PoolQC))
 
 lm.obj.init<-lm(SalePrice ~ 1,data=train.temp)
 lm.obj.full<-lm(SalePrice ~ .,data=train.temp)
 
 lm.fAIC.2<-stepAIC(lm.obj.init,direction=c("forward"), scope=list(upper=lm.obj.full,lower=lm.obj.init), trace=0)
 lm.bAIC.2<-stepAIC(lm.obj.full,direction=c("backward"), trace=0)
-lm.dAIC.2<-step(lm.obj.full,direction=c("both"), scope=list(upper=lm.obj.full,lower=lm.obj.init), trace=0)
-
-fAIC.2.prediction<-predict(lm.fAIC.2, newdata=test, interval="prediction")
-bAIC.2.prediction<-predict(lm.bAIC.2, newdata=test, interval = "prediction")
-dAIC.2.prediction<-predict(lm.dAIC.2, newdata=test, interval="prediction")
-plot(lm.fAIC.2,which=c(1))
-plot(lm.bAIC.2,which=c(1))
 ```
 
 ```{r}
-c(summary(lm.bAIC.2)$fstatistic,summary(lm.bAIC.2)$r.squared)
-c(summary(lm.fAIC.2)$fstatistic,summary(lm.fAIC.2)$r.squared)
-c(summary(lm.dAIC.2)$fstatistic,summary(lm.dAIC.2)$r.squared)
-dim(as.data.frame(lm.bAIC.2$coefficients))
-dim(as.data.frame(lm.fAIC.2$coefficients))
-dim(as.data.frame(lm.dAIC.2$coefficients))
+plot(lm.fAIC.2,which=c(1,2,3,4))
+plot(lm.bAIC.2,which=c(1,2,3,4))
 ```
+Let's see how our model works with those points dropped:
+```{r}
+c(summary(lm.fAIC.2)$fstatistic[1],summary(lm.fAIC.2)$r.squared,dim(as.data.frame(lm.fAIC.2$coefficients))[1])
+c(summary(lm.bAIC.2)$fstatistic[1],summary(lm.bAIC.2)$r.squared,dim(as.data.frame(lm.bAIC.2$coefficients))[1])
+```
+Our R^2 improved by ~.025, which is a decent improvement over ~.90.
 
 Next, let's take a quick look at how our training set's price distribution compares with the predicted values for our test set.
 ```{r}
+fAIC.2.prediction<-predict(lm.fAIC.2, newdata=test, interval="prediction")
+bAIC.2.prediction<-predict(lm.bAIC.2, newdata=test, interval = "prediction")
+
 quantile(train$SalePrice,na.rm=TRUE,probs=c(0,.05,.25,.50,.75,.95,1))
 quantile(bAIC.prediction,na.rm=TRUE,probs=c(0,.05,.25,.50,.75,.95,1))
 quantile(fAIC.prediction,na.rm=TRUE,probs=c(0,.05,.25,.50,.75,.95,1))
@@ -101,8 +102,10 @@ fAIC.2.prediction[,1][fAIC.2.prediction[,1]<=low.q]<-low.q
 fAIC.2.prediction[,1][fAIC.2.prediction[,1]>=high.q]<-high.q
 bAIC.2.prediction[,1][bAIC.2.prediction[,1]<=low.q]<-low.q
 bAIC.2.prediction[,1][bAIC.2.prediction[,1]>=high.q]<-high.q
+print(c(min(fAIC.2.prediction[,1]),max(fAIC.2.prediction[,1])))
 ```
 
+Now we'll submit the model and see how it performs.  They came out extremely similar, so I arbitrarily chose bAIC.
 ```{r}
 df.output<-as.data.frame(cbind(test$Id,bAIC.2.prediction[,1]))
 colnames(df.output)<-c('Id','SalePrice')
