@@ -996,7 +996,7 @@ Yes, the prediction error went down to 0.19609!
 
 
 ## Where our work begins 
-
+# using AIC to determine best model
 ```{r}
 library(stats)
 ```
@@ -1009,6 +1009,7 @@ step(fit2)
 fit3 <- lm(formula = log(SalePrice) ~ MSSubClass + MSZoning + LotArea + LotConfig + Neighborhood + Condition1 + Condition2 + BldgType + HouseStyle + OverallQual + OverallCond + YearBuilt + YearRemodAdd + Exterior1st + ExterCond + Foundation + BsmtQual + BsmtExposure + BsmtFinType1 + BsmtFinSF1 + BsmtFinSF2 + BsmtUnfSF + Heating + HeatingQC + CentralAir + `1stFlrSF` + `2ndFlrSF` + LowQualFinSF + BsmtFullBath + FullBath + HalfBath + KitchenAbvGr + KitchenQual + TotRmsAbvGrd + Functional + Fireplaces + GarageCars + GarageArea + GarageQual + GarageCond + WoodDeckSF + EnclosedPorch + `3SsnPorch` + ScreenPorch + PoolArea + PoolQC + MiscFeature + SaleType + SaleCondition, data = train)
 ```
 
+# outpuing model
 ```{r}
 predicted.SalePrice3 = exp(predict(fit3, newdata=test))
 SubmitDF = data.frame(Id=test$Id, SalePrice=predicted.SalePrice3)
@@ -1017,6 +1018,7 @@ write.csv(file='C:/Users/rodri/Desktop/Submission3.csv', SubmitDF, row.names = F
 
 Score: 0.26621 before adjusting of outliers
 
+# adjust for ouliers
 ```{r}
 plot(predicted.SalePrice3 ~ predicted.SalePrice)
 ```
@@ -1029,7 +1031,45 @@ write.csv(file='C:/Users/rodri/Desktop/Submission3.csv', SubmitDF, row.names = F
 ```
 Score: 0.19617 after adjusting of outliers.
 
-Next going to try and choose my own predictors.
+# View F-test results for full model to get an idea of the most influential predictors
+```{r}
+summary(fit2)
+```
+
+# create reduced model using influential predictors
+```{r}
+train.highF <- lm(log(SalePrice) ~ LotArea + OverallQual + YearBuilt + Neighborhood + KitchenQual + LotArea*Neighborhood, data = train)
+summary(train.highF)
+```
+# View crosswise correlations to make sure no predictors are highly correlated
+
+```{r}
+train.sub <- train %>% select(LotArea, OverallQual, YearBuilt, Neighborhood, KitchenQual)
+pairs(train.sub)
+```
+# Look at "best" subsets of reduced model. Adjusted r^2 is highest for full reduced model.  AIC is lowest for full reduced model but should it be negative?
+# No further reductions need to be done
+```{r}
+library(olsrr)
+
+fit.olsrr <- ols_step_best_subset(train.highF)
+fit.olsrr
+```
+
+# predict test set results using trained linear model
+```{r}
+predicted.SalePrice3 = exp(predict(train.highF, newdata=test))
+```
+
+
+# create data frame of IDs and predicted Sale Prices, write to csv
+```{r}
+SubmitDF = data.frame(Id=test$Id, SalePrice=predicted.SalePrice3)
+write.csv(file='~/Submission_LRB.csv', SubmitDF, row.names = FALSE)
+```
+.19457 which is better! 
+
+# Next going to try and choose my own predictors.
 
 ```{r}
 fit4 =  lm(formula = log(SalePrice) ~ SaleType+SaleCondition+FullBath+BedroomAbvGr+GrLivArea, data = train)
@@ -1048,6 +1088,8 @@ This should be worse than our previous model.
 0.26267 which it is. 
 
 ## Lets Try Splines
+
+# using the earth library to do Multivariate Adaptive Regression Splines(MARS)
 ```{r}
 library(earth) 
 fit5 <- earth(log(SalePrice)~.,data=train)
@@ -1067,10 +1109,11 @@ plot(predicted.SalePrice5 ~ predicted.SalePrice)
 
 0.13238!!! This is even without model selection.
 
-Lets try with model tuning 
+# Lets try with model tuning 
 ```{r}
 library(caret)
 ```
+# making a grid search to find the best fit
 
 ```{r}
 hyper_grid <- expand.grid(
@@ -1086,6 +1129,8 @@ fit6 <- train(
   tuneGrid = hyper_grid
 )
 ```
+
+# looking at the best tune combonation
 ```{r}
 fit6$bestTune
 ```
@@ -1097,7 +1142,7 @@ p1 <- vip(fit6, num_features = 40, bar = FALSE, value = "gcv") + ggtitle("GCV")
 p2 <- vip(fit6, num_features = 40, bar = FALSE, value = "rss") + ggtitle("RSS")
 gridExtra::grid.arrange(p1, p2, ncol = 2)
 ```
-
+# Trying MARS with our AIC model
 ```{r}
 fit6 <- earth(log(SalePrice)~OverallQual+GrLivArea+YearBuilt+BsmtFinSF1+OverallCond+`2ndFlrSF`+LotArea+Condition2+TotalBsmtSF+BedroomAbvGr+GarageCars,data=train)
 ```
@@ -1114,3 +1159,21 @@ plot(predicted.SalePrice6 ~ predicted.SalePrice)
 ```
 
 0.13586 worse than before. I think this is pretty good.
+
+# Trying MARS with our trimmed down model which was the best performace model before MARS
+```{r}
+fit7 <- earth(log(SalePrice)~ LotArea + OverallQual + YearBuilt + Neighborhood + KitchenQual + LotArea*Neighborhood,data=train)
+```
+
+```{r}
+predicted.SalePrice7 = exp(predict(fit7, newdata=test))
+SubmitDF = data.frame(Id=test$Id, SalePrice=predicted.SalePrice7)
+names(SubmitDF)[2]<-"SalePrice"
+write.csv(file='C:/Users/rodri/Desktop/Submission7.csv', SubmitDF, row.names = FALSE)
+```
+
+```{r}
+plot(predicted.SalePrice7 ~ predicted.SalePrice)
+```
+
+0.18318 interesting how splines plus best performing model turns out to be worse than using all the predictors. 
