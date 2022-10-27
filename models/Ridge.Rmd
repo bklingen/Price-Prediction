@@ -19,6 +19,52 @@ source(knitr::purl("../KaggleHousePrices.Rmd", quiet = TRUE))
 
 ```{r libraries, include=FALSE}
 library(splines)
+library(glmnet)
 ```
 
+
+```{r}
+fit.all <- train %>% select(-Id) %>% 
+  lm(log(SalePrice) ~ ., data=.)
+```
+
+
+```{r}
+X <- model.matrix(fit.all)[,-1]
+X.sd = scale(X)
+head(X.sd)
+```
+
+```{r}
+fit.ridge <- glmnet(x=X.sd, y=train$SalePrice, alpha=0)
+plot(fit.ridge, xvar="lambda", label=TRUE)
+```
+
+```{r}
+cross.val <- cv.glmnet(x=X.sd, y=train$SalePrice, alpha=0)
+plot(cross.val)
+```
+
+
+```{r}
+fit.ridge.opt <- glmnet(x=X, y=train$SalePrice, 
+                        lambda=cross.val$lambda.min, 
+                        alpha = 1, standardize = TRUE)
+coef(fit.ridge.opt)
+```
+
+
+`predict(fit.ridge.opt, newx=test)` raises an error regarding the number of variables. This is because the fit function creates dummy variables. We must model the test set to have the same structure as the modeled training set (175 variables).
+
+```{r}
+predicted.ridge = test %>% 
+  select(-Id) %>% 
+  model.matrix(as.formula("~."), .) %>%
+  tibble::as_tibble() %>%
+  select(., -setdiff(colnames(.), colnames(X))) %>%
+  as.matrix() %>%
+  predict(fit.ridge.opt, newx=.)
+SubmitDF = data.frame(Id=test$Id, SalePrice=predicted.ridge)
+write.csv(file='../submissions/ridge1.csv', SubmitDF, row.names = FALSE)
+```
 

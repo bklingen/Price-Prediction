@@ -87,11 +87,11 @@ fct_count(train$MSZoning)
 fct_count(test$MSZoning)
 ```
 ```{r warning=FALSE}
-mszoning.collapse <- function(x) fct_collapse(x,
-                  "FV" = c("FV"),
-                  "RL" = c("RL", "RP"),
-                  "RO" = c("RM", "RH"),
-                  other_level = "other")
+mszoning.collapse <- function(x) factor(x,
+                                     levels=c("FV", "RL", "RP", "RM", "RH"),
+                                     labels=c("FV", "RL", "RL", "RO", "RO")) %>%
+                                
+                  fct_explicit_na(., "other")
 
 train <- train %>% mutate(MSZoning = as.factor(MSZoning), MSZoning = mszoning.collapse(MSZoning))
 test <- test %>% mutate(MSZoning = as.factor(MSZoning), MSZoning = mszoning.collapse(MSZoning))
@@ -129,11 +129,10 @@ Assuming the 1/2 story refers to a basement level as "(un)finished" terminology 
     - 190	2 FAMILY CONVERSION - ALL STYLES AND AGES (30)
  
 ```{r}
-mssubclass.collapse <- function(x) fct_collapse(x,
-                  "1-story single-family 1946 & newer" = c("20"),
-                  "1-story single-family other" = c("30", "40", "45", "50"),
-                  "multi-level single-family non PUD" = c("60", "70", "75", "80", "85"),
-                  other_level = "other")
+mssubclass.collapse <- function(x) factor(x,
+                                     levels=c("20", "30", "40", "45", "50", "60", "70", "75", "80", "85"),
+                                     labels=c("1S SF 1946 & newer", "1S SF other", "1S SF other", "1S SF other", "1S SF other", "multi-level SF non PUD", "multi-level SF non PUD", "multi-level SF non PUD", "multi-level SF non PUD", "multi-level SF non PUD")) %>%
+  fct_explicit_na(., "other")
 
 train <- train %>% mutate(MSSubClass = as.factor(MSSubClass), MSSubClass = mssubclass.collapse(MSSubClass))
 test <- test %>% mutate(MSSubClass = as.factor(MSSubClass), MSSubClass = mssubclass.collapse(MSSubClass))
@@ -162,10 +161,9 @@ This results in only 4 categories:
   - Near arterial or feeder street
        
 ```{r warning=FALSE}
-condition.collapse <- function(x) fct_collapse(x,
-                  RR = c("RRNn", "RRAn", "RRNe", "RRAe"),
-                  Pos = c("PosN", "PosA"),
-                  St = c("Artery", "Feedr"))
+condition.collapse <- function(x) factor(x, 
+                                         levels=c("RRNn", "RRAn", "RRNe", "RRAe", "PosN", "PosA", "Artery", "Feedr", "Norm"), 
+                                         labels=c('RR', 'RR', 'RR', 'RR', 'Pos', 'Pos', 'St', 'St', "Norm"))
 
 train <- train %>% mutate_at(vars(Condition1, Condition2), condition.collapse)
 test <- test %>% mutate_at(vars(Condition1, Condition2), condition.collapse)
@@ -237,11 +235,18 @@ test$HouseStyle <- fct_collapse(test$HouseStyle, EqMore2story = c("2Story", "2.5
 
 
 ### Kyle:
+
+Mei completely altered the PoolQC-related code to fix model.matrix errors
 ```{r}
-cleanpool <- as.character(train_catPredictors$PoolQC)
-cleanpool[is.na(cleanpool)] <- "none"
-cleanpool <- as.factor(cleanpool)
+poolqc.collapse <- function(x) factor(x,
+                                     levels=c("Ex", "Gd", "TA", "Fa"),
+                                     labels=c("Ex", "Gd", "TA", "Fa")) %>%
+  fct_explicit_na(., "Other")
+
+train <- train %>% mutate(PoolQC = as.factor(PoolQC), PoolQC = poolqc.collapse(PoolQC))
+test <- test %>% mutate(PoolQC = as.factor(PoolQC), PoolQC = poolqc.collapse(PoolQC))
 ```
+
 
 ```{r}
 cleanfence <- as.character(train_catPredictors$Fence)
@@ -258,16 +263,8 @@ cleanfunc <- as.factor(cleanfunc)
 ```
 
 ```{r}
-train$PoolQC <- cleanpool
 train$Fence <- cleanfence
 train$Functional <- cleanfunc
-```
-
-We need to do the same for the test dataset, so I just copied the code block and replaced "train" by "test":
-```{r}
-cleanpool <- as.character(test_catPredictors$PoolQC)
-cleanpool[is.na(cleanpool)] <- "none"
-cleanpool <- as.factor(cleanpool)
 ```
 
 ```{r}
@@ -285,7 +282,6 @@ cleanfunc <- as.factor(cleanfunc)
 ```
 
 ```{r}
-test$PoolQC <- cleanpool
 test$Fence <- cleanfence
 test$Functional <- cleanfunc
 ```
@@ -301,15 +297,16 @@ heating <- fct_other(heating, keep=c("GasA", "GasW"))
 train$Heating <- heating
 ```
 
+(Same functionality, altered by Mei to fix model.matrix errors)
 ```{r}
 # Electrical: Collapsed similar categories together and handled missing values
-electrical <- as.character(train_catPredictors$Electrical)
+electrical.collapse <- function(x) factor(x,
+                                     levels=c("FuseA", "FuseF", "FuseP"),
+                                     labels=c("Fuse", "Fuse", "Fuse")) %>%
+  fct_explicit_na(., "Other")
 
-electrical <- fct_collapse(electrical, Fuse=c("FuseA", "FuseF", "FuseP"))
-electrical <- fct_collapse(electrical, Other=c("Mix"))
-electrical[is.na(electrical)] <- "Other"
-
-train$Electrical <- electrical
+train <- train %>% mutate(Electrical = as.factor(Electrical), Electrical = electrical.collapse(Electrical))
+test <- test %>% mutate(Electrical = as.factor(Electrical), Electrical = electrical.collapse(Electrical))
 ```
 
 ```{r}
@@ -327,16 +324,7 @@ heating <- fct_other(heating, keep=c("GasA", "GasW"))
 test$Heating <- heating
 ```
 
-```{r}
-# Electrical: Collapsed similar categories together and handled missing values
-electrical <- as.character(test_catPredictors$Electrical)
-
-electrical <- fct_collapse(electrical, Fuse=c("FuseA", "FuseF", "FuseP"))
-electrical <- fct_collapse(electrical, Other=c("Mix"))
-electrical[is.na(electrical)] <- "Other"
-
-test$Electrical <- electrical
-```
+(Mei removed the Electrical section as it was handled earlier)
 
 ```{r}
 # Fireplace: Handled missing values
@@ -530,16 +518,26 @@ garageFinish <- as.factor(garageFinish)
 test$GarageFinish <- garageFinish
 ```
 
-
-
+Mei changed garage qual so that model.matrix wouldn't error
 ```{r}
+garagequal.collapse <- function(x) factor(x,
+                                     levels=c("Ex", "Gd", "TA", "Fa", "Po"),
+                                     labels=c("Gd", "Gd", "TA", "Po", "Po")) %>%
+  fct_explicit_na(., "none")
+
+train <- train %>% mutate(GarageQual = as.factor(GarageQual), GarageQual = garagequal.collapse(GarageQual))
+test <- test %>% mutate(GarageQual = as.factor(GarageQual), GarageQual = garagequal.collapse(GarageQual))
+```
+
+
+```{r eval=FALSE, include=FALSE}
 ### GarageQual ###
 
 #Explore counts
 train_catPredictors %>% count(GarageQual, sort = TRUE)
 ```
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 #Handle NAs
 #According to the data description, NA means no garage. 
 #Change NA category to "none" to avoid issues.
@@ -548,7 +546,7 @@ garageQual[is.na(garageQual)] <- "none"
 garageQual <- as.factor(garageQual)
 ```
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 #Collapse categories: 
 # - Let's collapse Ex	(Excellent) and Gd	(Good) into 1 category: Gd
 # - Let's collapse Fa	(Fair) and Po	(Poor) into 1 category: Po
@@ -559,13 +557,13 @@ garageQual <- fct_collapse(garageQual, Po = c("Fa","Po"))
 ```
 
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 #Update column with new values
 train$GarageQual <- garageQual
 ```
 
 Need to do the same for test data:
-```{r}
+```{r eval=FALSE, include=FALSE}
 #Handle NAs
 #According to the data description, NA means no garage. 
 #Change NA category to "none" to avoid issues.
@@ -574,7 +572,7 @@ garageQual[is.na(garageQual)] <- "none"
 garageQual <- as.factor(garageQual)
 ```
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 #Collapse categories: 
 # - Let's collapse Ex	(Excellent) and Gd	(Good) into 1 category: Gd
 # - Let's collapse Fa	(Fair) and Po	(Poor) into 1 category: Po
@@ -585,7 +583,7 @@ garageQual <- fct_collapse(garageQual, Po = c("Fa","Po"))
 ```
 
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 #Update column with new values
 test$GarageQual <- garageQual
 ```
@@ -694,49 +692,6 @@ test$LotConfig <- fct_collapse(test$LotConfig, Other = c("Corner","CulDSac", "FR
 test$LandContour <- fct_collapse(test$LandContour, NonLvl = c("Bnk", "HLS", "Low"))
 ```
 
-For the variable `MiscFeature`, almost all values are missing. However, looking in the data description file, this actually means that the house simply doesn't have any other features. So, we set the NA's to "none", in both the train and test datasets. The same applies to `Alley`, where an NA means "none":
-```{r}
-train$MiscFeature = fct_explicit_na(train$MiscFeature, na_level="none")
-test$MiscFeature = fct_explicit_na(test$MiscFeature, na_level="none")
-
-train$Alley = fct_explicit_na(train$Alley, na_level="none")
-test$Alley = fct_explicit_na(test$Alley, na_level="none")
-```
-For `LotFrontage`, the missing values are genuine. (But lets hope that the value being missing has no connection to the sales price of a house.)
-
-Another issue with fitting a full model is the number of unique values a predictor has. If it only has **one unique value (or one unique factor level)**, then it doesn't vary, i.e., it is a constant. This causes issues because then the design matrix $X$ is not full rank. The column for the intercept is a column of all 1's, and then each column for a predictor which is constant is also a column of a fixed number. This causes a linear dependency between these columns, and the design matrix is not full rank.
-
-First, lets turn the character variables into factors, both in the training and testing data. This will pay off later:
-```{r}
-train = train %>% mutate(across(where(is.character), as.factor))
-test = test %>% mutate(across(where(is.character), as.factor))
-```
-
-Let's find the predictors which have constant values throughout:
-```{r}
-train %>%
-  summarize(across(everything(), ~length(unique(.x)))) %>%
-  sort()
-```
-There doesn't seem to be a variable that has only one unique value or one unique factor level. So we should be good to go.
-
-Having done/checked all that, we are ready to fit the full model with all variables. However, using `> fit2 = lm(log(SalePrice) ~ . , data=train %>% select(-Id, -SalePrice))`, I ran into a problem, where R shows the error message `contrasts can be applied only to factors with 2 or more levels`. 
-
-With trial and error, I saw that we can fit a model with the first 8 predictors, but when we include 'Utilities', there is an issue
-```{r}
-fit2 = lm(log(train$SalePrice) ~ . , data=train[,2:9])
-summary(fit2)
-```
-
-What is going on with utilities:
-```{r}
-summary(train$Utilities)
-```
-We see that it is almost constant! There is only one observation with a different utility type. Probably, that observation has some missing values on some other variables, and hence is removed from the design matrix, making it an all constant predictor. Let's check:
-```{r}
-train[train$Utilities == 'NoSeWa',]
-```
-There we go, `LotFrontage` is `NA` for this particular house, so it is removed, and the remaining houses all have the same utility type.
 
 ## Removing/Replacing Missing Values
 It is best to get the training dataset that has no missing values (since they will be discarded in the fitting process of the full model anyway), and then check if any other predictors are constant. Which variables still have a lot of missing values:
@@ -745,6 +700,26 @@ train %>%
   summarize(across(everything(), ~sum(is.na(.x)))) %>%
   sort(decreasing = TRUE)
 ```
+For the variable `MiscFeature`, almost all values are missing. However, looking in the data description file, this actually means that the house simply doesn't have any other features. So, we set the NA's to "none", in both the train and test datasets. The same applies to `Alley`, where an NA means "none":
+```{r}
+misc.collapse <- function(x) factor(x,
+                                     levels=c("Elev", "Gar2", "Othr", "Shed", "TenC"),
+                                     labels=c("Elev", "Gar2", "Other", "Shed", "TenC")) %>%
+  fct_explicit_na(., "None")
+
+train <- train %>% mutate(MiscFeature = as.factor(MiscFeature), MiscFeature = misc.collapse(MiscFeature))
+test <- test %>% mutate(MiscFeature = as.factor(MiscFeature), MiscFeature = misc.collapse(MiscFeature))
+       
+       
+train$MiscFeature = fct_explicit_na(train$MiscFeature, na_level="none")
+test$MiscFeature = fct_explicit_na(test$MiscFeature, na_level="none")
+
+train$Alley = fct_explicit_na(train$Alley, na_level="none")
+test$Alley = fct_explicit_na(test$Alley, na_level="none")
+```
+For `LotFrontage`, the missing values are genuine. (But lets hope that the value being missing has no connection to the sales price of a house.)
+
+
 For now, I'm going to drop `LotFrontage` from consideration, although we could impute values. I'm also going to drop `GarageYrBlt` from consideration, because it has around 80 missing values for those garages where there is no information. Since we have info on the garage from other variables, I rather keep 81 observations in the dataset, but not include `GarageYrBlt`. So, I'm going to drop `GarageYrBlt` from the list of predictors:
 ```{r}
 train = train %>% select(-LotFrontage, -GarageYrBlt)
@@ -784,6 +759,40 @@ We now have no missing predictor values in the training data:
 dim(train)
 dim(train %>% drop_na())
 ```
+## Handling Constant Predictors
+Another issue with fitting a full model is the number of unique values a predictor has. If it only has **one unique value (or one unique factor level)**, then it doesn't vary, i.e., it is a constant. This causes issues because then the design matrix $X$ is not full rank. The column for the intercept is a column of all 1's, and then each column for a predictor which is constant is also a column of a fixed number. This causes a linear dependency between these columns, and the design matrix is not full rank.
+
+First, lets turn the character variables into factors, both in the training and testing data. This will pay off later:
+```{r}
+train = train %>% mutate(across(where(is.character), as.factor))
+test = test %>% mutate(across(where(is.character), as.factor))
+```
+
+Let's find the predictors which have constant values throughout:
+```{r}
+train %>%
+  summarize(across(everything(), ~length(unique(.x)))) %>%
+  sort()
+```
+There doesn't seem to be a variable that has only one unique value or one unique factor level. So we should be good to go.
+
+Having done/checked all that, we are ready to fit the full model with all variables. However, using `> fit2 = lm(log(SalePrice) ~ . , data=train %>% select(-Id, -SalePrice))`, I ran into a problem, where R shows the error message `contrasts can be applied only to factors with 2 or more levels`. 
+
+With trial and error, I saw that we can fit a model with the first 8 predictors, but when we include 'Utilities', there is an issue
+```{r}
+fit2 = lm(log(train$SalePrice) ~ . , data=train[,2:9])
+summary(fit2)
+```
+
+What is going on with utilities:
+```{r}
+summary(train$Utilities)
+```
+We see that it is almost constant! There is only one observation with a different utility type. Probably, that observation has some missing values on some other variables, and hence is removed from the design matrix, making it an all constant predictor. Let's check:
+```{r}
+train[train$Utilities == 'NoSeWa',]
+```
+There we go, `LotFrontage` is `NA` for this particular house, so it is removed, and the remaining houses all have the same utility type.
 
 Let's now revisit check if any predictors are constant:
 ```{r}
